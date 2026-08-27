@@ -1,25 +1,28 @@
-const products = [
-  { id: 1, name: "X-Tudo", price: 15, description: "O mais completo da casa." },
-  { id: 2, name: "X-Calabresa", price: 12, description: "Lanche com sabor marcante de calabresa." },
-  { id: 3, name: "X-Bacon", price: 12, description: "Clássico com bacon." },
-  { id: 4, name: "X-Salsicha", price: 12, description: "Lanche reforçado com salsicha." },
-  { id: 5, name: "X-Banana", price: 12, description: "Uma combinação diferente e saborosa." },
-  { id: 6, name: "X-Salada", price: 9, description: "Clássico, leve e bem montado." },
-  { id: 7, name: "X-Burguer", price: 7, description: "Hambúrguer simples e direto ao ponto." },
-  { id: 8, name: "X-Egg / X-Pio", price: 7, description: "Opção com ovo." },
-  { id: 9, name: "Misto Duplo", price: 7, description: "Misto em versão dupla." },
-  { id: 10, name: "Queijo Duplo", price: 6, description: "Para quem gosta de muito queijo." },
-  { id: 11, name: "Hambúrguer", price: 5, description: "Hambúrguer tradicional." },
-  { id: 12, name: "Misto Quente", price: 5, description: "O clássico misto quente." },
-  { id: 13, name: "Misto Simples", price: 5, description: "Simples, rápido e saboroso." }
+const FALLBACK_PRODUCTS = [
+  { id: "1", name: "X-Tudo", price: 15, description: "O mais completo da casa.", category: "lanche", available: true, image: "" },
+  { id: "2", name: "X-Calabresa", price: 12, description: "Lanche com sabor marcante de calabresa.", category: "lanche", available: true, image: "" },
+  { id: "3", name: "X-Bacon", price: 12, description: "Clássico com bacon.", category: "lanche", available: true, image: "" },
+  { id: "4", name: "X-Salsicha", price: 12, description: "Lanche reforçado com salsicha.", category: "lanche", available: true, image: "" },
+  { id: "5", name: "X-Banana", price: 12, description: "Uma combinação diferente e saborosa.", category: "lanche", available: true, image: "" },
+  { id: "6", name: "X-Salada", price: 9, description: "Clássico, leve e bem montado.", category: "lanche", available: true, image: "" },
+  { id: "7", name: "X-Burguer", price: 7, description: "Hambúrguer simples e direto ao ponto.", category: "lanche", available: true, image: "" },
+  { id: "8", name: "X-Egg / X-Pio", price: 7, description: "Opção com ovo.", category: "lanche", available: true, image: "" },
+  { id: "9", name: "Misto Duplo", price: 7, description: "Misto em versão dupla.", category: "lanche", available: true, image: "" },
+  { id: "10", name: "Queijo Duplo", price: 6, description: "Para quem gosta de muito queijo.", category: "lanche", available: true, image: "" },
+  { id: "11", name: "Hambúrguer", price: 5, description: "Hambúrguer tradicional.", category: "lanche", available: true, image: "" },
+  { id: "12", name: "Misto Quente", price: 5, description: "O clássico misto quente.", category: "lanche", available: true, image: "" },
+  { id: "13", name: "Misto Simples", price: 5, description: "Simples, rápido e saboroso.", category: "lanche", available: true, image: "" }
 ];
 
 const WHATSAPP_NUMBER = "5592995159975";
+let products = [...FALLBACK_PRODUCTS];
 const cart = new Map();
 const $ = (selector) => document.querySelector(selector);
-const money = (value) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const money = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));
 
-const productsEl = $("#products");
+const lanchesEl = $("#lanchesProducts");
+const bebidasEl = $("#bebidasProducts");
 const cartItemsEl = $("#cartItems");
 const cartCountEl = $("#cartCount");
 const cartTotalEl = $("#cartTotal");
@@ -39,54 +42,89 @@ const changeFor = $("#changeFor");
 const addressFields = $("#addressFields");
 const addressInput = $("#address");
 
-function renderProducts() {
-  productsEl.innerHTML = products.map((product) => `
-    <article class="product-card">
-      <div class="product-image" role="img" aria-label="Foto ilustrativa de lanche"></div>
-      <div class="product-body">
-        <h3>${product.name}</h3>
-        <p>${product.description}</p>
-        <div class="product-bottom">
-          <span class="price">${money(product.price)}</span>
-          <button class="add-button" type="button" data-add="${product.id}" aria-label="Adicionar ${product.name}">+ Adicionar</button>
-        </div>
+function productCard(product) {
+  const available = product.available !== false;
+  const image = product.image ? `<img src="${product.image}" alt="${esc(product.name)}">` : "";
+  return `<article class="product-card${available ? "" : " unavailable"}">
+    <div class="product-image ${product.category === "bebida" ? "bebida" : "lanche"}">${image}${available ? "" : '<span class="unavailable-badge">Indisponível</span>'}</div>
+    <div class="product-body">
+      <h3>${esc(product.name)}</h3>
+      <p>${esc(product.description || "")}</p>
+      <div class="product-bottom">
+        <span class="price">${money(product.price)}</span>
+        <button class="add-button" type="button" data-add="${esc(product.id)}" ${available ? "" : "disabled"}>${available ? "+ Adicionar" : "Indisponível"}</button>
       </div>
-    </article>`).join("");
+    </div>
+  </article>`;
+}
+
+function renderProducts() {
+  const lanches = products.filter((p) => p.category !== "bebida");
+  const bebidas = products.filter((p) => p.category === "bebida");
+  lanchesEl.innerHTML = lanches.map(productCard).join("");
+  bebidasEl.innerHTML = bebidas.map(productCard).join("");
+  $("#lanchesEmpty").hidden = lanches.length > 0;
+  $("#bebidasEmpty").hidden = bebidas.length > 0;
+}
+
+async function loadProducts() {
+  try {
+    const response = await fetch("/api/products", { cache: "no-store" });
+    if (!response.ok) throw new Error();
+    const data = await response.json();
+    if (Array.isArray(data.products)) products = data.products.map((p) => ({ ...p, id: String(p.id) }));
+  } catch {
+    products = [...FALLBACK_PRODUCTS];
+  }
+  renderProducts();
+  renderCart();
 }
 
 function cartDetails() {
   let count = 0;
   let total = 0;
   cart.forEach((qty, id) => {
-    const product = products.find((item) => item.id === id);
+    const product = products.find((item) => String(item.id) === String(id));
     if (!product) return;
     count += qty;
-    total += product.price * qty;
+    total += Number(product.price) * qty;
   });
   return { count, total };
 }
 
 function renderCart() {
   const { count, total } = cartDetails();
-  cartCountEl.textContent = count === 1 ? "1 item" : `${count} itens`;
+  cartCountEl.textContent = count === 1 ? "1 item no carrinho" : `${count} itens no carrinho`;
   cartTotalEl.textContent = money(total);
   sheetTotalEl.textContent = money(total);
   checkoutTotalEl.textContent = money(total);
   goCheckoutBtn.disabled = count === 0;
 
   cartItemsEl.innerHTML = [...cart.entries()].map(([id, qty]) => {
-    const product = products.find((item) => item.id === id);
+    const product = products.find((item) => String(item.id) === String(id));
+    if (!product) return "";
     return `<div class="cart-item">
-      <div><strong>${product.name}</strong><small>${money(product.price)} cada</small>
-        <div class="qty-control"><button type="button" data-minus="${id}">−</button><span>${qty}</span><button type="button" data-plus="${id}">+</button></div>
-      </div><strong>${money(product.price * qty)}</strong>
+      <div><strong>${esc(product.name)}</strong><small>${money(product.price)} cada</small>
+        <div class="qty-control"><button type="button" data-minus="${esc(id)}">−</button><span>${qty}</span><button type="button" data-plus="${esc(id)}">+</button></div>
+      </div><strong>${money(Number(product.price) * qty)}</strong>
     </div>`;
   }).join("");
   cartEmptyEl.hidden = count > 0;
 }
 
-function addItem(id) { cart.set(id, (cart.get(id) || 0) + 1); renderCart(); }
-function changeQty(id, delta) { const next = (cart.get(id) || 0) + delta; if (next <= 0) cart.delete(id); else cart.set(id, next); renderCart(); }
+function addItem(id) {
+  const product = products.find((item) => String(item.id) === String(id));
+  if (!product || product.available === false) return;
+  cart.set(String(id), (cart.get(String(id)) || 0) + 1);
+  renderCart();
+}
+
+function changeQty(id, delta) {
+  const key = String(id);
+  const next = (cart.get(key) || 0) + delta;
+  if (next <= 0) cart.delete(key); else cart.set(key, next);
+  renderCart();
+}
 
 function openCart() { cartSheet.classList.add("open"); cartSheet.setAttribute("aria-hidden", "false"); sheetBackdrop.hidden = false; document.body.style.overflow = "hidden"; }
 function closeCart() { cartSheet.classList.remove("open"); cartSheet.setAttribute("aria-hidden", "true"); sheetBackdrop.hidden = true; document.body.style.overflow = ""; }
@@ -96,39 +134,54 @@ function getDeliveryType() { return document.querySelector('input[name="delivery
 function syncDeliveryFields() { const isDelivery = getDeliveryType() === "Entrega"; addressFields.hidden = !isDelivery; addressInput.required = isDelivery; }
 function syncPaymentFields() { const isCash = paymentEl.value === "Dinheiro"; changeWrap.hidden = !isCash; if (!isCash) changeFor.value = ""; }
 
+function orderItems() {
+  return [...cart.entries()].map(([id, qty]) => {
+    const product = products.find((item) => String(item.id) === String(id));
+    return product ? { name: product.name, qty, price: Number(product.price) } : null;
+  }).filter(Boolean);
+}
+
 function buildWhatsAppMessage(formData) {
   const { total } = cartDetails();
   const deliveryType = formData.get("deliveryType");
   const payment = formData.get("payment");
-  const lines = [];
-
-  lines.push("*NOVO PEDIDO - LANCHONETE*");
-  lines.push("");
-  lines.push(`*Cliente:* ${formData.get("customerName").trim()}`);
-  lines.push(`*Recebimento:* ${deliveryType}`);
+  const lines = ["*NOVO PEDIDO - LANCHONETE*", "", `*Cliente:* ${formData.get("customerName").trim()}`, `*Recebimento:* ${deliveryType}`];
   if (deliveryType === "Entrega") {
     lines.push(`*Endereço:* ${formData.get("address").trim()}`);
     const reference = formData.get("reference").trim();
     if (reference) lines.push(`*Referência:* ${reference}`);
   }
-  lines.push("");
-  lines.push("*PEDIDO*");
-  [...cart.entries()].forEach(([id, qty]) => {
-    const product = products.find((item) => item.id === id);
-    lines.push(`${qty}x ${product.name} - ${money(product.price * qty)}`);
-  });
-  lines.push("");
-  lines.push(`*Total:* ${money(total)}`);
-  lines.push(`*Pagamento:* ${payment}`);
+  lines.push("", "*PEDIDO*");
+  orderItems().forEach((item) => lines.push(`${item.qty}x ${item.name} - ${money(item.price * item.qty)}`));
+  lines.push("", `*Total:* ${money(total)}`, `*Pagamento:* ${payment}`);
   if (payment === "Dinheiro") {
     const change = formData.get("changeFor").trim();
     lines.push(`*Troco para:* ${change ? `R$ ${change}` : "não informado"}`);
   }
   const note = formData.get("orderNote").trim();
-  if (note) { lines.push(""); lines.push(`*Observação:* ${note}`); }
-  lines.push("");
-  lines.push("Pedido feito pelo cardápio digital da Lanchonete.");
+  if (note) lines.push("", `*Observação:* ${note}`);
+  lines.push("", "Pedido feito pelo cardápio digital da Lanchonete.");
   return lines.join("\n");
+}
+
+function localDateKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function registerOrder(formData) {
+  const { count, total } = cartDetails();
+  const payload = {
+    localDate: localDateKey(),
+    total,
+    itemCount: count,
+    payment: formData.get("payment"),
+    deliveryType: formData.get("deliveryType"),
+    items: orderItems().map(({ name, qty }) => ({ name, qty }))
+  };
+  try {
+    fetch("/api/orders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), keepalive: true }).catch(() => {});
+  } catch {}
 }
 
 async function loadPromotion() {
@@ -146,19 +199,21 @@ async function loadPromotion() {
   } catch { promoSection.hidden = true; }
 }
 
-productsEl.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-add]");
-  if (!button) return;
-  addItem(Number(button.dataset.add));
-  button.textContent = "Adicionado ✓";
-  setTimeout(() => button.textContent = "+ Adicionar", 900);
-});
-cartItemsEl.addEventListener("click", (event) => {
+document.addEventListener("click", (event) => {
+  const add = event.target.closest("[data-add]");
+  if (add && !add.disabled) {
+    addItem(add.dataset.add);
+    const original = "+ Adicionar";
+    add.textContent = "Adicionado ✓";
+    setTimeout(() => { if (!add.disabled) add.textContent = original; }, 900);
+    return;
+  }
   const plus = event.target.closest("[data-plus]");
   const minus = event.target.closest("[data-minus]");
-  if (plus) changeQty(Number(plus.dataset.plus), 1);
-  if (minus) changeQty(Number(minus.dataset.minus), -1);
+  if (plus) changeQty(plus.dataset.plus, 1);
+  if (minus) changeQty(minus.dataset.minus, -1);
 });
+
 openCartBtn.addEventListener("click", openCart);
 $("#closeCart").addEventListener("click", closeCart);
 sheetBackdrop.addEventListener("click", closeCart);
@@ -167,13 +222,21 @@ $("#closeCheckout").addEventListener("click", closeCheckout);
 checkoutBackdrop.addEventListener("click", closeCheckout);
 document.querySelectorAll('input[name="deliveryType"]').forEach((input) => input.addEventListener("change", syncDeliveryFields));
 paymentEl.addEventListener("change", syncPaymentFields);
+
 checkoutForm.addEventListener("submit", (event) => {
   event.preventDefault();
   if (cart.size === 0) { closeCheckout(); openCart(); return; }
   syncDeliveryFields();
   if (!checkoutForm.reportValidity()) return;
-  const message = buildWhatsAppMessage(new FormData(checkoutForm));
+  const formData = new FormData(checkoutForm);
+  registerOrder(formData);
+  const message = buildWhatsAppMessage(formData);
   window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
 });
 
-renderProducts(); renderCart(); syncDeliveryFields(); syncPaymentFields(); loadPromotion();
+renderProducts();
+renderCart();
+syncDeliveryFields();
+syncPaymentFields();
+loadProducts();
+loadPromotion();
