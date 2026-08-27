@@ -85,6 +85,14 @@ async function handlePromo(request, env) {
     catch { return json({ active: false, storageConfigured: true }); }
   }
 
+  if (request.method === "DELETE") {
+    const auth = authorized(request, env);
+    if (!auth.ok) return auth.response;
+    if (!env.PROMOTIONS) return json({ error: "Armazenamento ainda não configurado no Cloudflare." }, 500);
+    await env.PROMOTIONS.delete("current-promotion");
+    return json({ ok: true, deleted: true, storageConfigured: true });
+  }
+
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
   const auth = authorized(request, env);
   if (!auth.ok) return auth.response;
