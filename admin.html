@@ -65,10 +65,21 @@
                 <label>Categoria<select id="productCategory"><option value="lanche">Lanche</option><option value="bebida">Bebida</option></select></label>
               </div>
               <label>Descrição<textarea id="productDescription" rows="3" maxlength="220" placeholder="Descrição curta do produto"></textarea></label>
-              <label>Foto do produto — adicionar ou trocar
-                <input id="productImage" type="file" accept="image/jpeg,image/png,image/webp">
-                <small>Ao editar um produto, a foto atual aparece abaixo. Escolha uma nova imagem somente se quiser trocar a foto.</small>
-              </label>
+
+              <div class="image-field">
+                <span class="field-title">Foto do produto</span>
+                <input class="native-file-input" id="productImage" type="file" accept="image/jpeg,image/png,image/webp">
+                <label class="image-picker" for="productImage">
+                  <span class="image-picker-plus">+</span>
+                  <span class="image-picker-text"><strong>Selecionar uma imagem</strong><small id="productFileName">JPG, PNG ou WEBP</small></span>
+                  <span class="image-picker-arrow">›</span>
+                </label>
+                <div class="image-action-row" id="productImageTools" hidden>
+                  <button type="button" class="secondary-small" id="editProductImage">Editar imagem</button>
+                  <button type="button" class="secondary-small danger-outline" id="removeProductImage">Remover imagem</button>
+                </div>
+              </div>
+
               <div class="image-preview" id="productPreview" hidden><img id="productPreviewImage" alt="Foto atual ou nova prévia do produto"></div>
               <label class="toggle"><input id="productAvailable" type="checkbox" checked><span>Produto disponível</span></label>
               <button class="save-button" type="submit" id="productSaveButton">Adicionar produto</button>
@@ -89,7 +100,22 @@
           <form id="promoForm">
             <label>Título da promoção<input id="promoTitle" type="text" maxlength="80" placeholder="Ex.: 2 X-Salada por R$ 10,00" required></label>
             <label>Pequena descrição<textarea id="promoDescription" rows="3" maxlength="240" placeholder="Ex.: Promoção válida enquanto durar o estoque."></textarea></label>
-            <label>Foto da promoção<input id="promoImage" type="file" accept="image/jpeg,image/png,image/webp"><small>A imagem será reduzida automaticamente antes de publicar.</small></label>
+
+            <div class="image-field">
+              <span class="field-title">Foto da promoção</span>
+              <input class="native-file-input" id="promoImage" type="file" accept="image/jpeg,image/png,image/webp">
+              <label class="image-picker" for="promoImage">
+                <span class="image-picker-plus">+</span>
+                <span class="image-picker-text"><strong>Selecionar uma imagem</strong><small id="promoFileName">JPG, PNG ou WEBP</small></span>
+                <span class="image-picker-arrow">›</span>
+              </label>
+              <div class="image-action-row" id="promoImageTools" hidden>
+                <button type="button" class="secondary-small" id="editPromoImage">Editar imagem</button>
+                <button type="button" class="secondary-small danger-outline" id="removePromoImage">Remover imagem</button>
+              </div>
+              <small class="field-hint">Depois de escolher, você pode recortar, aproximar e reposicionar a foto.</small>
+            </div>
+
             <div class="preview" id="preview" hidden><img id="previewImage" alt="Prévia da promoção"><div><span>PROMOÇÃO</span><strong id="previewTitle"></strong><p id="previewDescription"></p></div></div>
             <label class="toggle"><input id="promoActive" type="checkbox" checked><span>Mostrar promoção no site</span></label>
             <button type="submit" class="save-button" id="promoSaveButton">Publicar promoção</button>
@@ -102,6 +128,36 @@
       <p class="security-note">O painel não possui link no cardápio público e as alterações exigem a senha de administrador.</p>
     </div>
   </main>
+
+  <div class="image-editor-backdrop" id="imageEditorBackdrop" hidden>
+    <section class="image-editor" role="dialog" aria-modal="true" aria-labelledby="imageEditorTitle">
+      <div class="image-editor-head">
+        <div><small>AJUSTAR FOTO</small><h2 id="imageEditorTitle">Editar imagem</h2></div>
+        <button type="button" class="icon-close" id="closeImageEditor" aria-label="Fechar">×</button>
+      </div>
+
+      <div class="editor-stage"><canvas id="imageEditorCanvas" width="800" height="600"></canvas></div>
+
+      <div class="editor-controls">
+        <label>Formato
+          <select id="editorAspect">
+            <option value="4:3">4:3</option>
+            <option value="1:1">Quadrado</option>
+            <option value="16:9">16:9</option>
+          </select>
+        </label>
+        <label>Zoom <span id="zoomValue">1.00x</span><input id="editorZoom" type="range" min="1" max="3" step="0.01" value="1"></label>
+        <label>Posição horizontal<input id="editorX" type="range" min="0" max="100" step="1" value="50"></label>
+        <label>Posição vertical<input id="editorY" type="range" min="0" max="100" step="1" value="50"></label>
+      </div>
+
+      <div class="editor-actions">
+        <button type="button" class="secondary-button" id="cancelImageEditor">Cancelar</button>
+        <button type="button" class="save-button" id="saveImageEditor">Usar esta imagem</button>
+      </div>
+    </section>
+  </div>
+
   <script>
     const showLoginPassword = document.getElementById('showLoginPassword');
     const loginPassword = document.getElementById('loginPassword');
