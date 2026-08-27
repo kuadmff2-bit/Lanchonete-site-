@@ -16,6 +16,10 @@
       <p>Use a senha de administrador para gerenciar produtos, promoções e acompanhar os pedidos.</p>
       <form id="loginForm">
         <label>Senha<input id="loginPassword" type="password" autocomplete="current-password" placeholder="Senha do administrador" required></label>
+        <label class="toggle" style="justify-content:flex-start; margin-top:-4px;">
+          <input id="showLoginPassword" type="checkbox">
+          <span>Mostrar senha</span>
+        </label>
         <button class="save-button" type="submit">Entrar</button>
         <p class="status" id="loginStatus" aria-live="polite"></p>
       </form>
@@ -95,6 +99,13 @@
       <p class="security-note">O painel não possui link no cardápio público e as alterações exigem a senha de administrador.</p>
     </div>
   </main>
+  <script>
+    const showLoginPassword = document.getElementById('showLoginPassword');
+    const loginPassword = document.getElementById('loginPassword');
+    showLoginPassword.addEventListener('change', () => {
+      loginPassword.type = showLoginPassword.checked ? 'text' : 'password';
+    });
+  </script>
   <script src="admin.js"></script>
 </body>
 </html>
