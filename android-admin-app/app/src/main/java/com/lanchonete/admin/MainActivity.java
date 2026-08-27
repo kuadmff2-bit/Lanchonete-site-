@@ -6,7 +6,6 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
@@ -20,6 +19,7 @@ import android.widget.Toast;
 public class MainActivity extends Activity {
     private static final String ADMIN_URL = "https://lanchonete-site.kuadmff2.workers.dev/admin";
     private static final String ALLOWED_HOST = "lanchonete-site.kuadmff2.workers.dev";
+    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.1";
     private static final int FILE_CHOOSER_REQUEST = 4102;
 
     private WebView webView;
@@ -53,8 +53,15 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
 
-        CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        String currentUserAgent = settings.getUserAgentString();
+        if (currentUserAgent == null) currentUserAgent = "";
+        if (!currentUserAgent.contains(APP_USER_AGENT)) {
+            settings.setUserAgentString((currentUserAgent + " " + APP_USER_AGENT).trim());
+        }
+
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        cookieManager.setAcceptThirdPartyCookies(webView, true);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -81,6 +88,15 @@ public class MainActivity extends Activity {
 
                 openExternal(uri);
                 return true;
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (url != null && url.contains("/admin")) {
+                    restoreAdminSession();
+                    installLogoutHook();
+                }
             }
         });
 
@@ -116,6 +132,42 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void restoreAdminSession() {
+        if (webView == null) return;
+
+        String script = "(async()=>{" +
+                "try{" +
+                "const r=await fetch('/api/orders',{cache:'no-store',credentials:'include'});" +
+                "if(!r.ok)return;" +
+                "const d=await r.json();" +
+                "const login=document.querySelector('#loginPanel');" +
+                "const app=document.querySelector('#adminApp');" +
+                "if(login)login.hidden=true;" +
+                "if(app)app.hidden=false;" +
+                "if(typeof renderDashboard==='function')renderDashboard(d);" +
+                "if(typeof loadProducts==='function'&&typeof loadPromotion==='function')" +
+                "await Promise.all([loadProducts(),loadPromotion()]);" +
+                "}catch(e){}" +
+                "})();";
+
+        webView.evaluateJavascript(script, null);
+    }
+
+    private void installLogoutHook() {
+        if (webView == null) return;
+
+        String script = "(()=>{" +
+                "const b=document.querySelector('#logoutButton');" +
+                "if(!b||b.dataset.appLogoutHook==='1')return;" +
+                "b.dataset.appLogoutHook='1';" +
+                "b.addEventListener('click',()=>{" +
+                "fetch('/api/logout',{method:'POST',credentials:'include',keepalive:true}).catch(()=>{});" +
+                "});" +
+                "})();";
+
+        webView.evaluateJavascript(script, null);
+    }
+
     private void openExternal(Uri uri) {
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW, uri);
@@ -143,6 +195,18 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        CookieManager.getInstance().flush();
+        super.onPause();
+    }
+
+    @Override
+    protected void onStop() {
+        CookieManager.getInstance().flush();
+        super.onStop();
+    }
+
+    @Override
     public void onBackPressed() {
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
@@ -161,6 +225,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        CookieManager.getInstance().flush();
         if (webView != null) {
             webView.stopLoading();
             webView.setWebChromeClient(null);
