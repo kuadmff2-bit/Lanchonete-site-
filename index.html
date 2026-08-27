@@ -13,10 +13,7 @@
   <header class="topbar">
     <a class="brand" href="#inicio" aria-label="Lanchonete - início">
       <span class="brand-mark">L</span>
-      <span>
-        <strong>Lanchonete</strong>
-        <small>Cardápio 24 horas</small>
-      </span>
+      <span><strong>Lanchonete</strong><small>Cardápio 24 horas</small></span>
     </a>
     <a class="whatsapp-mini" href="https://wa.me/5592995159975" target="_blank" rel="noopener">WhatsApp</a>
   </header>
@@ -43,13 +40,19 @@
 
     <section class="section" id="cardapio">
       <div class="section-heading">
-        <div>
-          <span class="section-kicker">CARDÁPIO</span>
-          <h2>Escolha seu lanche</h2>
-        </div>
+        <div><span class="section-kicker">CARDÁPIO</span><h2>Lanches</h2></div>
         <span class="open-pill">● 24h</span>
       </div>
-      <div class="products" id="products"></div>
+      <div class="products" id="lanchesProducts"></div>
+      <p class="category-empty" id="lanchesEmpty" hidden>Nenhum lanche cadastrado no momento.</p>
+    </section>
+
+    <section class="section drinks-section" id="bebidas">
+      <div class="section-heading">
+        <div><span class="section-kicker">BEBIDAS</span><h2>Para acompanhar</h2></div>
+      </div>
+      <div class="products" id="bebidasProducts"></div>
+      <p class="category-empty" id="bebidasEmpty">Nenhuma bebida cadastrada no momento.</p>
     </section>
 
     <section class="info-strip" aria-label="Informações">
@@ -59,9 +62,9 @@
     </section>
   </main>
 
-  <button class="cart-bar" id="openCart" type="button" aria-label="Abrir carrinho">
-    <span><small id="cartCount">0 itens</small><strong>Ver pedido</strong></span>
-    <strong id="cartTotal">R$ 0,00</strong>
+  <button class="cart-bar" id="openCart" type="button" aria-label="Ver pedido e abrir carrinho">
+    <span class="cart-action"><small id="cartCount">0 itens no carrinho</small><strong>VER PEDIDO <b>→</b></strong></span>
+    <span class="cart-price"><small>total</small><strong id="cartTotal">R$ 0,00</strong></span>
   </button>
 
   <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
@@ -82,7 +85,6 @@
       <div><small>FINALIZAR</small><h2>Dados do pedido</h2></div>
       <button class="icon-button" id="closeCheckout" type="button" aria-label="Fechar">×</button>
     </div>
-
     <form id="checkoutForm">
       <label>Seu nome<input id="customerName" name="customerName" type="text" autocomplete="name" placeholder="Ex.: Carlos" required></label>
       <div class="choice-group">
