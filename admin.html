@@ -10,24 +10,90 @@
 </head>
 <body>
   <main class="admin-shell">
-    <header class="admin-head">
-      <div><span>ÁREA DO DONO</span><h1>Promoção</h1><p>Publique uma promoção simples no cardápio.</p></div>
-      <a href="/" class="back-link">Ver site</a>
-    </header>
-    <section class="admin-card">
-      <form id="promoForm">
-        <label>Senha de administrador<input id="adminPassword" type="password" autocomplete="current-password" placeholder="Sua senha" required></label>
-        <label>Título da promoção<input id="promoTitle" type="text" maxlength="80" placeholder="Ex.: 2 X-Salada por R$ 10,00" required></label>
-        <label>Pequena descrição<textarea id="promoDescription" rows="3" maxlength="240" placeholder="Ex.: Promoção válida enquanto durar o estoque."></textarea></label>
-        <label>Foto da promoção<input id="promoImage" type="file" accept="image/jpeg,image/png,image/webp"><small>A imagem será reduzida automaticamente antes de publicar.</small></label>
-        <div class="preview" id="preview" hidden><img id="previewImage" alt="Prévia da promoção"><div><span>PROMOÇÃO</span><strong id="previewTitle"></strong><p id="previewDescription"></p></div></div>
-        <label class="toggle"><input id="promoActive" type="checkbox" checked><span>Mostrar promoção no site</span></label>
-        <button type="submit" class="save-button" id="saveButton">Publicar promoção</button>
-        <button type="button" class="secondary-button" id="hideButton">Ocultar promoção atual</button>
-        <p class="status" id="status" aria-live="polite"></p>
+    <section class="login-panel" id="loginPanel">
+      <div class="login-brand"><span class="admin-mark">L</span><div><strong>Lanchonete</strong><small>Área do dono</small></div></div>
+      <h1>Entrar no painel</h1>
+      <p>Use a senha de administrador para gerenciar produtos, promoções e acompanhar os pedidos.</p>
+      <form id="loginForm">
+        <label>Senha<input id="loginPassword" type="password" autocomplete="current-password" placeholder="Senha do administrador" required></label>
+        <button class="save-button" type="submit">Entrar</button>
+        <p class="status" id="loginStatus" aria-live="polite"></p>
       </form>
     </section>
-    <p class="security-note">Esta página não aparece no cardápio público. O acesso é protegido por uma senha configurada no Cloudflare.</p>
+
+    <div id="adminApp" hidden>
+      <header class="admin-head">
+        <div><span>ÁREA DO DONO</span><h1>Painel da Lanchonete</h1><p>Produtos, promoções e pedidos em um só lugar.</p></div>
+        <div class="head-actions"><a href="/" class="back-link">Ver site</a><button type="button" class="back-link button-link" id="logoutButton">Sair</button></div>
+      </header>
+
+      <nav class="admin-tabs" aria-label="Seções do painel">
+        <button type="button" class="tab-button active" data-tab="dashboard">Pedidos</button>
+        <button type="button" class="tab-button" data-tab="products">Produtos</button>
+        <button type="button" class="tab-button" data-tab="promo">Promoção</button>
+      </nav>
+
+      <section class="tab-panel active" id="tab-dashboard">
+        <div class="panel-heading"><div><span>RESUMO</span><h2>Pedidos</h2></div><button type="button" class="secondary-small" id="refreshOrders">Atualizar</button></div>
+        <p class="panel-note">Os números contam quando o cliente toca em “Enviar pedido no WhatsApp”.</p>
+        <div class="stats-grid">
+          <article class="stat-card"><small>Pedidos hoje</small><strong id="todayOrders">0</strong></article>
+          <article class="stat-card"><small>Total de pedidos</small><strong id="totalOrders">0</strong></article>
+          <article class="stat-card"><small>Valor hoje</small><strong id="todayValue">R$ 0,00</strong></article>
+          <article class="stat-card"><small>Valor acumulado</small><strong id="totalValue">R$ 0,00</strong></article>
+        </div>
+        <div class="admin-card recent-card">
+          <div class="card-title"><h3>Pedidos recentes</h3><span>últimos 40</span></div>
+          <div id="recentOrders" class="recent-orders"><p class="empty-admin">Ainda não há pedidos registrados.</p></div>
+        </div>
+        <p class="status" id="dashboardStatus" aria-live="polite"></p>
+      </section>
+
+      <section class="tab-panel" id="tab-products">
+        <div class="panel-heading"><div><span>CARDÁPIO</span><h2>Produtos</h2></div></div>
+        <div class="admin-grid">
+          <section class="admin-card">
+            <div class="card-title"><h3 id="productFormTitle">Adicionar produto</h3><button type="button" class="text-button" id="cancelEdit" hidden>Cancelar edição</button></div>
+            <form id="productForm">
+              <label>Nome<input id="productName" type="text" maxlength="80" placeholder="Ex.: Coca-Cola lata" required></label>
+              <div class="two-fields">
+                <label>Preço<input id="productPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" required></label>
+                <label>Categoria<select id="productCategory"><option value="lanche">Lanche</option><option value="bebida">Bebida</option></select></label>
+              </div>
+              <label>Descrição<textarea id="productDescription" rows="3" maxlength="220" placeholder="Descrição curta do produto"></textarea></label>
+              <label>Foto<input id="productImage" type="file" accept="image/jpeg,image/png,image/webp"><small>A foto é reduzida automaticamente.</small></label>
+              <div class="image-preview" id="productPreview" hidden><img id="productPreviewImage" alt="Prévia do produto"></div>
+              <label class="toggle"><input id="productAvailable" type="checkbox" checked><span>Produto disponível</span></label>
+              <button class="save-button" type="submit" id="productSaveButton">Adicionar produto</button>
+              <p class="status" id="productStatus" aria-live="polite"></p>
+            </form>
+          </section>
+
+          <section class="admin-card product-list-card">
+            <div class="card-title"><h3>Produtos cadastrados</h3><span id="productCount">0 produtos</span></div>
+            <div class="product-list" id="productList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-promo">
+        <div class="panel-heading"><div><span>DESTAQUE</span><h2>Promoção</h2></div></div>
+        <section class="admin-card promo-admin-card">
+          <form id="promoForm">
+            <label>Título da promoção<input id="promoTitle" type="text" maxlength="80" placeholder="Ex.: 2 X-Salada por R$ 10,00" required></label>
+            <label>Pequena descrição<textarea id="promoDescription" rows="3" maxlength="240" placeholder="Ex.: Promoção válida enquanto durar o estoque."></textarea></label>
+            <label>Foto da promoção<input id="promoImage" type="file" accept="image/jpeg,image/png,image/webp"><small>A imagem será reduzida automaticamente antes de publicar.</small></label>
+            <div class="preview" id="preview" hidden><img id="previewImage" alt="Prévia da promoção"><div><span>PROMOÇÃO</span><strong id="previewTitle"></strong><p id="previewDescription"></p></div></div>
+            <label class="toggle"><input id="promoActive" type="checkbox" checked><span>Mostrar promoção no site</span></label>
+            <button type="submit" class="save-button" id="promoSaveButton">Publicar promoção</button>
+            <button type="button" class="secondary-button" id="hidePromoButton">Ocultar promoção atual</button>
+            <p class="status" id="promoStatus" aria-live="polite"></p>
+          </form>
+        </section>
+      </section>
+
+      <p class="security-note">O painel não possui link no cardápio público e as alterações exigem a senha de administrador.</p>
+    </div>
   </main>
   <script src="admin.js"></script>
 </body>
