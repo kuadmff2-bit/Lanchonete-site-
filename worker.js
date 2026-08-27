@@ -138,6 +138,25 @@ async function handleOrders(request, env) {
     return json({ stats, recent: Array.isArray(recent) ? recent : [], storageConfigured: true });
   }
 
+  if (request.method === "DELETE") {
+    const auth = authorized(request, env);
+    if (!auth.ok) return auth.response;
+    if (!env.PROMOTIONS) return json({ error: "Armazenamento ainda não configurado no Cloudflare." }, 500);
+
+    await Promise.all([
+      env.PROMOTIONS.delete("order-stats"),
+      env.PROMOTIONS.delete("recent-orders")
+    ]);
+
+    return json({
+      ok: true,
+      cleared: true,
+      stats: { totalOrders: 0, totalValue: 0, todayOrders: 0, todayValue: 0, currentDate: localDateKeyForWorker() },
+      recent: [],
+      storageConfigured: true
+    });
+  }
+
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
   if (!env.PROMOTIONS) return json({ ok: false, storageConfigured: false }, 202);
 
@@ -186,6 +205,10 @@ async function handleOrders(request, env) {
     env.PROMOTIONS.put("recent-orders", JSON.stringify(recent))
   ]);
   return json({ ok: true, storageConfigured: true });
+}
+
+function localDateKeyForWorker() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 export default {
