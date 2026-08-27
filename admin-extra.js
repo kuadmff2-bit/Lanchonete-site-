@@ -328,3 +328,36 @@ const storageObserver = new MutationObserver(() => {
   const el = $(selector);
   if (el) storageObserver.observe(el, { childList: true, characterData: true, subtree: true });
 });
+
+// Exclusão definitiva da promoção.
+const hidePromoButton = $("#hidePromoButton");
+const deletePromoButton = document.createElement("button");
+deletePromoButton.type = "button";
+deletePromoButton.id = "deletePromoButton";
+deletePromoButton.className = "secondary-button danger-outline";
+deletePromoButton.textContent = "Excluir promoção";
+hidePromoButton.insertAdjacentElement("afterend", deletePromoButton);
+
+deletePromoButton.addEventListener("click", async () => {
+  const confirmed = confirm("Excluir esta promoção definitivamente? A foto, o título e a descrição serão apagados.");
+  if (!confirmed) return;
+
+  deletePromoButton.disabled = true;
+  setStatus("#promoStatus", "Excluindo promoção...");
+
+  try {
+    await api("/api/promo", { method: "DELETE" });
+    promoImageData = "";
+    $("#promoTitle").value = "";
+    $("#promoDescription").value = "";
+    $("#promoImage").value = "";
+    $("#promoActive").checked = false;
+    syncPromoImageUI();
+    $("#preview").hidden = true;
+    setStatus("#promoStatus", "Promoção excluída definitivamente.", "ok");
+  } catch (error) {
+    setStatus("#promoStatus", error.message || "Não foi possível excluir a promoção.", "error");
+  } finally {
+    deletePromoButton.disabled = false;
+  }
+});
