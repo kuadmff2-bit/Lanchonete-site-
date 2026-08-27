@@ -4,6 +4,9 @@
   "main": "worker.js",
   "compatibility_date": "2026-08-27",
   "keep_vars": true,
+  "secrets": {
+    "required": ["ADMIN_PASSWORD"]
+  },
   "assets": {
     "directory": ".",
     "binding": "ASSETS",
