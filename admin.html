@@ -65,8 +65,11 @@
                 <label>Categoria<select id="productCategory"><option value="lanche">Lanche</option><option value="bebida">Bebida</option></select></label>
               </div>
               <label>Descrição<textarea id="productDescription" rows="3" maxlength="220" placeholder="Descrição curta do produto"></textarea></label>
-              <label>Foto<input id="productImage" type="file" accept="image/jpeg,image/png,image/webp"><small>A foto é reduzida automaticamente.</small></label>
-              <div class="image-preview" id="productPreview" hidden><img id="productPreviewImage" alt="Prévia do produto"></div>
+              <label>Foto do produto — adicionar ou trocar
+                <input id="productImage" type="file" accept="image/jpeg,image/png,image/webp">
+                <small>Ao editar um produto, a foto atual aparece abaixo. Escolha uma nova imagem somente se quiser trocar a foto.</small>
+              </label>
+              <div class="image-preview" id="productPreview" hidden><img id="productPreviewImage" alt="Foto atual ou nova prévia do produto"></div>
               <label class="toggle"><input id="productAvailable" type="checkbox" checked><span>Produto disponível</span></label>
               <button class="save-button" type="submit" id="productSaveButton">Adicionar produto</button>
               <p class="status" id="productStatus" aria-live="polite"></p>
