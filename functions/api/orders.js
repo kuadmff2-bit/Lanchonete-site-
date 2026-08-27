@@ -5,11 +5,23 @@ function safeDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : new Date().toISOString().slice(0, 10);
 }
 
+function emptyOrders(storageConfigured = true) {
+  return {
+    stats: { totalOrders: 0, totalValue: 0, todayOrders: 0, todayValue: 0, currentDate: "" },
+    recent: [],
+    storageConfigured
+  };
+}
+
 export async function onRequestGet({ request, env }) {
-  if (!env.PROMOTIONS) return json({ error: "KV PROMOTIONS não configurado." }, 500);
-  if (!env.ADMIN_PASSWORD) return json({ error: "Senha de administrador não configurada." }, 500);
+  if (!env.ADMIN_PASSWORD) return json({ error: "Senha de administrador não configurada no Cloudflare." }, 500);
+
   const password = request.headers.get("x-admin-password") || "";
   if (password !== env.ADMIN_PASSWORD) return json({ error: "Senha incorreta." }, 401);
+
+  // O login não deve falhar só porque o KV ainda não foi criado.
+  // Assim a senha pode ser validada e o dono consegue entrar no painel.
+  if (!env.PROMOTIONS) return json(emptyOrders(false));
 
   const statsRaw = await env.PROMOTIONS.get("order-stats");
   const recentRaw = await env.PROMOTIONS.get("recent-orders");
@@ -17,11 +29,12 @@ export async function onRequestGet({ request, env }) {
   let recent = [];
   try { if (statsRaw) stats = { ...stats, ...JSON.parse(statsRaw) }; } catch {}
   try { if (recentRaw) recent = JSON.parse(recentRaw); } catch {}
-  return json({ stats, recent: Array.isArray(recent) ? recent : [] });
+  return json({ stats, recent: Array.isArray(recent) ? recent : [], storageConfigured: true });
 }
 
 export async function onRequestPost({ request, env }) {
-  if (!env.PROMOTIONS) return json({ ok: false }, 202);
+  if (!env.PROMOTIONS) return json({ ok: false, storageConfigured: false }, 202);
+
   let body;
   try { body = await request.json(); } catch { return json({ ok: false }, 400); }
 
@@ -66,5 +79,5 @@ export async function onRequestPost({ request, env }) {
     env.PROMOTIONS.put("order-stats", JSON.stringify(stats)),
     env.PROMOTIONS.put("recent-orders", JSON.stringify(recent))
   ]);
-  return json({ ok: true });
+  return json({ ok: true, storageConfigured: true });
 }
