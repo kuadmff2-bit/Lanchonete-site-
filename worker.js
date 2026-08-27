@@ -1,8 +1,9 @@
-const json = (data, status = 200) => new Response(JSON.stringify(data), {
+const json = (data, status = 200, extraHeaders = {}) => new Response(JSON.stringify(data), {
   status,
   headers: {
     "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store"
+    "cache-control": "no-store",
+    ...extraHeaders
   }
 });
 
@@ -22,11 +23,68 @@ const DEFAULT_PRODUCTS = [
   { id: "13", name: "Misto Simples", price: 5, description: "Simples, rápido e saboroso.", category: "lanche", available: true, image: "" }
 ];
 
-function authorized(request, env) {
-  if (!env.ADMIN_PASSWORD) return { ok: false, response: json({ error: "Senha de administrador não configurada no Cloudflare." }, 500) };
+const ADMIN_SESSION_COOKIE = "lanchonete_admin_session";
+const ADMIN_SESSION_TTL = 60 * 60 * 24 * 30;
+const ADMIN_APP_MARKER = "LanchoneteAdminApp/";
+
+function readCookie(request, name) {
+  const cookie = request.headers.get("cookie") || "";
+  const prefix = `${name}=`;
+  for (const part of cookie.split(";")) {
+    const value = part.trim();
+    if (value.startsWith(prefix)) return decodeURIComponent(value.slice(prefix.length));
+  }
+  return "";
+}
+
+function isAdminAppRequest(request) {
+  return (request.headers.get("user-agent") || "").includes(ADMIN_APP_MARKER);
+}
+
+function sessionCookie(token) {
+  return `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${ADMIN_SESSION_TTL}; HttpOnly; Secure; SameSite=Strict`;
+}
+
+function clearSessionCookie() {
+  return `${ADMIN_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`;
+}
+
+async function createAdminSession(env) {
+  if (!env.PROMOTIONS) return "";
+  const token = `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "")}`;
+  await env.PROMOTIONS.put(`admin-session:${token}`, "1", { expirationTtl: ADMIN_SESSION_TTL });
+  return token;
+}
+
+async function authorized(request, env) {
+  if (!env.ADMIN_PASSWORD) {
+    return { ok: false, response: json({ error: "Senha de administrador não configurada no Cloudflare." }, 500) };
+  }
+
+  const sessionToken = readCookie(request, ADMIN_SESSION_COOKIE);
+  if (sessionToken && env.PROMOTIONS) {
+    const validSession = await env.PROMOTIONS.get(`admin-session:${sessionToken}`);
+    if (validSession === "1") {
+      return { ok: true, sessionToken, fromSession: true };
+    }
+  }
+
   const password = request.headers.get("x-admin-password") || "";
-  if (password !== env.ADMIN_PASSWORD) return { ok: false, response: json({ error: "Senha incorreta." }, 401) };
-  return { ok: true };
+  if (password !== env.ADMIN_PASSWORD) {
+    return { ok: false, response: json({ error: "Senha incorreta." }, 401) };
+  }
+
+  let setCookie = "";
+  if (isAdminAppRequest(request) && env.PROMOTIONS) {
+    const token = await createAdminSession(env);
+    if (token) setCookie = sessionCookie(token);
+  }
+
+  return { ok: true, setCookie, fromSession: false };
+}
+
+function authJson(data, auth, status = 200) {
+  return json(data, status, auth?.setCookie ? { "set-cookie": auth.setCookie } : {});
 }
 
 function normalizeProduct(item, index) {
@@ -62,7 +120,7 @@ async function handleProducts(request, env) {
   }
 
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
-  const auth = authorized(request, env);
+  const auth = await authorized(request, env);
   if (!auth.ok) return auth.response;
   if (!env.PROMOTIONS) return json({ error: "Armazenamento ainda não configurado no Cloudflare." }, 500);
 
@@ -73,7 +131,7 @@ async function handleProducts(request, env) {
 
   const products = body.products.map(normalizeProduct).filter((p) => p.name);
   await env.PROMOTIONS.put("products", JSON.stringify(products));
-  return json({ ok: true, products, storageConfigured: true });
+  return authJson({ ok: true, products, storageConfigured: true }, auth);
 }
 
 async function handlePromo(request, env) {
@@ -86,15 +144,15 @@ async function handlePromo(request, env) {
   }
 
   if (request.method === "DELETE") {
-    const auth = authorized(request, env);
+    const auth = await authorized(request, env);
     if (!auth.ok) return auth.response;
     if (!env.PROMOTIONS) return json({ error: "Armazenamento ainda não configurado no Cloudflare." }, 500);
     await env.PROMOTIONS.delete("current-promotion");
-    return json({ ok: true, deleted: true, storageConfigured: true });
+    return authJson({ ok: true, deleted: true, storageConfigured: true }, auth);
   }
 
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
-  const auth = authorized(request, env);
+  const auth = await authorized(request, env);
   if (!auth.ok) return auth.response;
   if (!env.PROMOTIONS) return json({ error: "Armazenamento ainda não configurado no Cloudflare." }, 500);
 
@@ -111,20 +169,20 @@ async function handlePromo(request, env) {
   if (promo.image && !promo.image.startsWith("data:image/")) return json({ error: "Formato de imagem inválido." }, 400);
   if (promo.image.length > 1500000) return json({ error: "A imagem ficou muito grande." }, 413);
   await env.PROMOTIONS.put("current-promotion", JSON.stringify(promo));
-  return json({ ok: true, promotion: promo, storageConfigured: true });
+  return authJson({ ok: true, promotion: promo, storageConfigured: true }, auth);
 }
 
 async function handleOrders(request, env) {
   if (request.method === "GET") {
-    const auth = authorized(request, env);
+    const auth = await authorized(request, env);
     if (!auth.ok) return auth.response;
 
     if (!env.PROMOTIONS) {
-      return json({
+      return authJson({
         stats: { totalOrders: 0, totalValue: 0, todayOrders: 0, todayValue: 0, currentDate: "" },
         recent: [],
         storageConfigured: false
-      });
+      }, auth);
     }
 
     const [statsRaw, recentRaw] = await Promise.all([
@@ -135,11 +193,11 @@ async function handleOrders(request, env) {
     let recent = [];
     try { if (statsRaw) stats = { ...stats, ...JSON.parse(statsRaw) }; } catch {}
     try { if (recentRaw) recent = JSON.parse(recentRaw); } catch {}
-    return json({ stats, recent: Array.isArray(recent) ? recent : [], storageConfigured: true });
+    return authJson({ stats, recent: Array.isArray(recent) ? recent : [], storageConfigured: true }, auth);
   }
 
   if (request.method === "DELETE") {
-    const auth = authorized(request, env);
+    const auth = await authorized(request, env);
     if (!auth.ok) return auth.response;
     if (!env.PROMOTIONS) return json({ error: "Armazenamento ainda não configurado no Cloudflare." }, 500);
 
@@ -148,13 +206,13 @@ async function handleOrders(request, env) {
       env.PROMOTIONS.delete("recent-orders")
     ]);
 
-    return json({
+    return authJson({
       ok: true,
       cleared: true,
       stats: { totalOrders: 0, totalValue: 0, todayOrders: 0, todayValue: 0, currentDate: localDateKeyForWorker() },
       recent: [],
       storageConfigured: true
-    });
+    }, auth);
   }
 
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
@@ -211,17 +269,31 @@ function localDateKeyForWorker() {
   return new Date().toISOString().slice(0, 10);
 }
 
+async function handleLogout(request, env) {
+  if (request.method !== "POST" && request.method !== "DELETE") {
+    return json({ error: "Método não permitido." }, 405);
+  }
+
+  const sessionToken = readCookie(request, ADMIN_SESSION_COOKIE);
+  if (sessionToken && env.PROMOTIONS) {
+    await env.PROMOTIONS.delete(`admin-session:${sessionToken}`);
+  }
+
+  return json({ ok: true }, 200, { "set-cookie": clearSessionCookie() });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/auth") {
       if (request.method !== "GET") return json({ error: "Método não permitido." }, 405);
-      const auth = authorized(request, env);
+      const auth = await authorized(request, env);
       if (!auth.ok) return auth.response;
-      return json({ ok: true, storageConfigured: Boolean(env.PROMOTIONS) });
+      return authJson({ ok: true, storageConfigured: Boolean(env.PROMOTIONS) }, auth);
     }
 
+    if (url.pathname === "/api/logout") return handleLogout(request, env);
     if (url.pathname === "/api/products") return handleProducts(request, env);
     if (url.pathname === "/api/promo") return handlePromo(request, env);
     if (url.pathname === "/api/orders") return handleOrders(request, env);
