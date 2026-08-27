@@ -16,7 +16,6 @@ const products = [
 
 const WHATSAPP_NUMBER = "5592995159975";
 const cart = new Map();
-
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -41,7 +40,7 @@ const addressFields = $("#addressFields");
 const addressInput = $("#address");
 
 function renderProducts() {
-  productsEl.innerHTML = products.map((product, index) => `
+  productsEl.innerHTML = products.map((product) => `
     <article class="product-card">
       <div class="product-image" role="img" aria-label="Foto ilustrativa de lanche"></div>
       <div class="product-body">
@@ -49,118 +48,53 @@ function renderProducts() {
         <p>${product.description}</p>
         <div class="product-bottom">
           <span class="price">${money(product.price)}</span>
-          <button class="add-button" type="button" data-add="${product.id}" aria-label="Adicionar ${product.name}">
-            + Adicionar
-          </button>
+          <button class="add-button" type="button" data-add="${product.id}" aria-label="Adicionar ${product.name}">+ Adicionar</button>
         </div>
       </div>
-    </article>
-  `).join("");
+    </article>`).join("");
 }
 
 function cartDetails() {
   let count = 0;
   let total = 0;
-
   cart.forEach((qty, id) => {
-    const product = products.find(item => item.id === id);
+    const product = products.find((item) => item.id === id);
     if (!product) return;
     count += qty;
     total += product.price * qty;
   });
-
   return { count, total };
 }
 
 function renderCart() {
   const { count, total } = cartDetails();
-
   cartCountEl.textContent = count === 1 ? "1 item" : `${count} itens`;
   cartTotalEl.textContent = money(total);
   sheetTotalEl.textContent = money(total);
   checkoutTotalEl.textContent = money(total);
   goCheckoutBtn.disabled = count === 0;
 
-  const entries = [...cart.entries()];
-
-  cartItemsEl.innerHTML = entries.map(([id, qty]) => {
-    const product = products.find(item => item.id === id);
-    return `
-      <div class="cart-item">
-        <div>
-          <strong>${product.name}</strong>
-          <small>${money(product.price)} cada</small>
-          <div class="qty-control">
-            <button type="button" data-minus="${id}" aria-label="Diminuir ${product.name}">−</button>
-            <span>${qty}</span>
-            <button type="button" data-plus="${id}" aria-label="Aumentar ${product.name}">+</button>
-          </div>
-        </div>
-        <strong>${money(product.price * qty)}</strong>
-      </div>
-    `;
+  cartItemsEl.innerHTML = [...cart.entries()].map(([id, qty]) => {
+    const product = products.find((item) => item.id === id);
+    return `<div class="cart-item">
+      <div><strong>${product.name}</strong><small>${money(product.price)} cada</small>
+        <div class="qty-control"><button type="button" data-minus="${id}">−</button><span>${qty}</span><button type="button" data-plus="${id}">+</button></div>
+      </div><strong>${money(product.price * qty)}</strong>
+    </div>`;
   }).join("");
-
   cartEmptyEl.hidden = count > 0;
 }
 
-function addItem(id) {
-  cart.set(id, (cart.get(id) || 0) + 1);
-  renderCart();
-}
+function addItem(id) { cart.set(id, (cart.get(id) || 0) + 1); renderCart(); }
+function changeQty(id, delta) { const next = (cart.get(id) || 0) + delta; if (next <= 0) cart.delete(id); else cart.set(id, next); renderCart(); }
 
-function changeQty(id, delta) {
-  const next = (cart.get(id) || 0) + delta;
-  if (next <= 0) cart.delete(id);
-  else cart.set(id, next);
-  renderCart();
-}
-
-function openCart() {
-  cartSheet.classList.add("open");
-  cartSheet.setAttribute("aria-hidden", "false");
-  sheetBackdrop.hidden = false;
-  document.body.style.overflow = "hidden";
-}
-
-function closeCart() {
-  cartSheet.classList.remove("open");
-  cartSheet.setAttribute("aria-hidden", "true");
-  sheetBackdrop.hidden = true;
-  document.body.style.overflow = "";
-}
-
-function openCheckout() {
-  closeCart();
-  checkoutBackdrop.hidden = false;
-  checkoutModal.classList.add("open");
-  checkoutModal.setAttribute("aria-hidden", "false");
-  document.body.style.overflow = "hidden";
-  $("#customerName").focus();
-}
-
-function closeCheckout() {
-  checkoutBackdrop.hidden = true;
-  checkoutModal.classList.remove("open");
-  checkoutModal.setAttribute("aria-hidden", "true");
-  document.body.style.overflow = "";
-}
-
-function getDeliveryType() {
-  return document.querySelector('input[name="deliveryType"]:checked').value;
-}
-
-function syncDeliveryFields() {
-  const isDelivery = getDeliveryType() === "Entrega";
-  addressFields.hidden = !isDelivery;
-  addressInput.required = isDelivery;
-}
-
-function syncPaymentFields() {
-  const isCash = paymentEl.value === "Dinheiro";
-  changeWrap.hidden = !isCash;
-  if (!isCash) changeFor.value = "";
-}
+function openCart() { cartSheet.classList.add("open"); cartSheet.setAttribute("aria-hidden", "false"); sheetBackdrop.hidden = false; document.body.style.overflow = "hidden"; }
+function closeCart() { cartSheet.classList.remove("open"); cartSheet.setAttribute("aria-hidden", "true"); sheetBackdrop.hidden = true; document.body.style.overflow = ""; }
+function openCheckout() { closeCart(); checkoutBackdrop.hidden = false; checkoutModal.classList.add("open"); checkoutModal.setAttribute("aria-hidden", "false"); document.body.style.overflow = "hidden"; $("#customerName").focus(); }
+function closeCheckout() { checkoutBackdrop.hidden = true; checkoutModal.classList.remove("open"); checkoutModal.setAttribute("aria-hidden", "true"); document.body.style.overflow = ""; }
+function getDeliveryType() { return document.querySelector('input[name="deliveryType"]:checked').value; }
+function syncDeliveryFields() { const isDelivery = getDeliveryType() === "Entrega"; addressFields.hidden = !isDelivery; addressInput.required = isDelivery; }
+function syncPaymentFields() { const isCash = paymentEl.value === "Dinheiro"; changeWrap.hidden = !isCash; if (!isCash) changeFor.value = ""; }
 
 function buildWhatsAppMessage(formData) {
   const { total } = cartDetails();
@@ -168,44 +102,48 @@ function buildWhatsAppMessage(formData) {
   const payment = formData.get("payment");
   const lines = [];
 
-  lines.push("🍔 *NOVO PEDIDO - LENDÁRIOS*");
+  lines.push("*NOVO PEDIDO - LANCHONETE*");
   lines.push("");
-  lines.push(`👤 *Cliente:* ${formData.get("customerName").trim()}`);
-  lines.push(`🛵 *Recebimento:* ${deliveryType}`);
-
+  lines.push(`*Cliente:* ${formData.get("customerName").trim()}`);
+  lines.push(`*Recebimento:* ${deliveryType}`);
   if (deliveryType === "Entrega") {
-    lines.push(`📍 *Endereço:* ${formData.get("address").trim()}`);
+    lines.push(`*Endereço:* ${formData.get("address").trim()}`);
     const reference = formData.get("reference").trim();
-    if (reference) lines.push(`📌 *Referência:* ${reference}`);
+    if (reference) lines.push(`*Referência:* ${reference}`);
   }
-
   lines.push("");
   lines.push("*PEDIDO*");
-
   [...cart.entries()].forEach(([id, qty]) => {
-    const product = products.find(item => item.id === id);
-    lines.push(`${qty}x ${product.name} — ${money(product.price * qty)}`);
+    const product = products.find((item) => item.id === id);
+    lines.push(`${qty}x ${product.name} - ${money(product.price * qty)}`);
   });
-
   lines.push("");
-  lines.push(`💰 *Total:* ${money(total)}`);
-  lines.push(`💳 *Pagamento:* ${payment}`);
-
+  lines.push(`*Total:* ${money(total)}`);
+  lines.push(`*Pagamento:* ${payment}`);
   if (payment === "Dinheiro") {
     const change = formData.get("changeFor").trim();
-    lines.push(`💵 *Troco para:* ${change ? `R$ ${change}` : "não informado"}`);
+    lines.push(`*Troco para:* ${change ? `R$ ${change}` : "não informado"}`);
   }
-
   const note = formData.get("orderNote").trim();
-  if (note) {
-    lines.push("");
-    lines.push(`📝 *Observação:* ${note}`);
-  }
-
+  if (note) { lines.push(""); lines.push(`*Observação:* ${note}`); }
   lines.push("");
-  lines.push("Pedido feito pelo cardápio digital.");
-
+  lines.push("Pedido feito pelo cardápio digital da Lanchonete.");
   return lines.join("\n");
+}
+
+async function loadPromotion() {
+  const promoSection = $("#promoSection");
+  try {
+    const response = await fetch("/api/promo", { cache: "no-store" });
+    if (!response.ok) throw new Error();
+    const promo = await response.json();
+    if (!promo?.active || (!promo.image && !promo.title && !promo.description)) { promoSection.hidden = true; return; }
+    const image = $("#promoImage");
+    if (promo.image) { image.src = promo.image; image.hidden = false; } else image.hidden = true;
+    $("#promoTitle").textContent = promo.title || "Promoção do dia";
+    $("#promoDescription").textContent = promo.description || "";
+    promoSection.hidden = false;
+  } catch { promoSection.hidden = true; }
 }
 
 productsEl.addEventListener("click", (event) => {
@@ -213,51 +151,29 @@ productsEl.addEventListener("click", (event) => {
   if (!button) return;
   addItem(Number(button.dataset.add));
   button.textContent = "Adicionado ✓";
-  window.setTimeout(() => {
-    button.textContent = "+ Adicionar";
-  }, 900);
+  setTimeout(() => button.textContent = "+ Adicionar", 900);
 });
-
 cartItemsEl.addEventListener("click", (event) => {
   const plus = event.target.closest("[data-plus]");
   const minus = event.target.closest("[data-minus]");
   if (plus) changeQty(Number(plus.dataset.plus), 1);
   if (minus) changeQty(Number(minus.dataset.minus), -1);
 });
-
 openCartBtn.addEventListener("click", openCart);
 $("#closeCart").addEventListener("click", closeCart);
 sheetBackdrop.addEventListener("click", closeCart);
 goCheckoutBtn.addEventListener("click", openCheckout);
 $("#closeCheckout").addEventListener("click", closeCheckout);
 checkoutBackdrop.addEventListener("click", closeCheckout);
-
-document.querySelectorAll('input[name="deliveryType"]').forEach((input) => {
-  input.addEventListener("change", syncDeliveryFields);
-});
-
+document.querySelectorAll('input[name="deliveryType"]').forEach((input) => input.addEventListener("change", syncDeliveryFields));
 paymentEl.addEventListener("change", syncPaymentFields);
-
 checkoutForm.addEventListener("submit", (event) => {
   event.preventDefault();
-
-  if (cart.size === 0) {
-    closeCheckout();
-    openCart();
-    return;
-  }
-
+  if (cart.size === 0) { closeCheckout(); openCart(); return; }
   syncDeliveryFields();
-
   if (!checkoutForm.reportValidity()) return;
-
-  const formData = new FormData(checkoutForm);
-  const message = buildWhatsAppMessage(formData);
-  const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
-  window.open(url, "_blank", "noopener");
+  const message = buildWhatsAppMessage(new FormData(checkoutForm));
+  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
 });
 
-renderProducts();
-renderCart();
-syncDeliveryFields();
-syncPaymentFields();
+renderProducts(); renderCart(); syncDeliveryFields(); syncPaymentFields(); loadPromotion();

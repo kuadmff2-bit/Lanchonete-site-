@@ -3,35 +3,41 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111111">
-  <meta name="description" content="Cardápio digital Lendários. Escolha seu lanche e finalize o pedido pelo WhatsApp.">
-  <title>Lendários | Cardápio</title>
+  <meta name="theme-color" content="#0d0d0d">
+  <meta name="description" content="Cardápio digital da Lanchonete. Escolha seu lanche e finalize pelo WhatsApp.">
+  <title>Lanchonete | Cardápio</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#inicio" aria-label="Lendários - início">
+    <a class="brand" href="#inicio" aria-label="Lanchonete - início">
       <span class="brand-mark">L</span>
       <span>
-        <strong>Lendários</strong>
+        <strong>Lanchonete</strong>
         <small>Cardápio 24 horas</small>
       </span>
     </a>
-
-    <a class="whatsapp-mini" href="https://wa.me/5592995159975" target="_blank" rel="noopener">
-      WhatsApp
-    </a>
+    <a class="whatsapp-mini" href="https://wa.me/5592995159975" target="_blank" rel="noopener">WhatsApp</a>
   </header>
 
   <main id="inicio">
     <section class="hero">
-      <div class="hero-overlay"></div>
       <div class="hero-content">
         <span class="eyebrow">ABERTO 24 HORAS</span>
         <h1>Seu lanche.<br>Do seu jeito.</h1>
-        <p>Escolha, adicione ao carrinho e envie o pedido pronto para o WhatsApp.</p>
-        <a class="hero-button" href="#cardapio">Ver cardápio</a>
+        <p>Escolha seus itens, informe o endereço e envie o pedido pronto para o WhatsApp.</p>
+      </div>
+    </section>
+
+    <section class="promo-section" id="promoSection" hidden>
+      <div class="promo-card">
+        <img id="promoImage" class="promo-image" alt="Imagem da promoção">
+        <div class="promo-content">
+          <span class="promo-label">PROMOÇÃO</span>
+          <h2 id="promoTitle">Promoção do dia</h2>
+          <p id="promoDescription"></p>
+        </div>
       </div>
     </section>
 
@@ -43,144 +49,67 @@
         </div>
         <span class="open-pill">● 24h</span>
       </div>
-
       <div class="products" id="products"></div>
     </section>
 
     <section class="info-strip" aria-label="Informações">
-      <div>
-        <strong>Pedido rápido</strong>
-        <span>Sem cadastro</span>
-      </div>
-      <div>
-        <strong>WhatsApp</strong>
-        <span>(92) 99515-9975</span>
-      </div>
-      <div>
-        <strong>Pagamento</strong>
-        <span>Pix, cartão ou dinheiro</span>
-      </div>
+      <div><strong>Pedido rápido</strong><span>Sem cadastro</span></div>
+      <div><strong>WhatsApp</strong><span>(92) 99515-9975</span></div>
+      <div><strong>Pagamento</strong><span>Pix, cartão ou dinheiro</span></div>
     </section>
   </main>
 
   <button class="cart-bar" id="openCart" type="button" aria-label="Abrir carrinho">
-    <span>
-      <small id="cartCount">0 itens</small>
-      <strong>Ver pedido</strong>
-    </span>
+    <span><small id="cartCount">0 itens</small><strong>Ver pedido</strong></span>
     <strong id="cartTotal">R$ 0,00</strong>
   </button>
 
   <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
-
   <aside class="sheet" id="cartSheet" aria-hidden="true" aria-label="Seu pedido">
     <div class="sheet-head">
-      <div>
-        <small>SEU PEDIDO</small>
-        <h2>Carrinho</h2>
-      </div>
+      <div><small>SEU PEDIDO</small><h2>Carrinho</h2></div>
       <button class="icon-button" id="closeCart" type="button" aria-label="Fechar carrinho">×</button>
     </div>
-
     <div class="cart-items" id="cartItems"></div>
-
-    <div class="cart-empty" id="cartEmpty">
-      Seu carrinho está vazio.
-    </div>
-
-    <div class="cart-summary">
-      <span>Total</span>
-      <strong id="sheetTotal">R$ 0,00</strong>
-    </div>
-
-    <button class="primary-button" id="goCheckout" type="button" disabled>
-      Continuar pedido
-    </button>
+    <div class="cart-empty" id="cartEmpty">Seu carrinho está vazio.</div>
+    <div class="cart-summary"><span>Total</span><strong id="sheetTotal">R$ 0,00</strong></div>
+    <button class="primary-button" id="goCheckout" type="button" disabled>Continuar pedido</button>
   </aside>
 
   <div class="modal-backdrop" id="checkoutBackdrop" hidden></div>
-
   <section class="checkout-modal" id="checkoutModal" aria-hidden="true" aria-label="Finalizar pedido">
     <div class="sheet-head">
-      <div>
-        <small>FINALIZAR</small>
-        <h2>Dados do pedido</h2>
-      </div>
+      <div><small>FINALIZAR</small><h2>Dados do pedido</h2></div>
       <button class="icon-button" id="closeCheckout" type="button" aria-label="Fechar">×</button>
     </div>
 
     <form id="checkoutForm">
-      <label>
-        Seu nome
-        <input id="customerName" name="customerName" type="text" autocomplete="name" placeholder="Ex.: Carlos" required>
-      </label>
-
+      <label>Seu nome<input id="customerName" name="customerName" type="text" autocomplete="name" placeholder="Ex.: Carlos" required></label>
       <div class="choice-group">
         <span class="field-label">Como você quer receber?</span>
         <div class="segmented">
-          <label>
-            <input type="radio" name="deliveryType" value="Entrega" checked>
-            <span>Entrega</span>
-          </label>
-          <label>
-            <input type="radio" name="deliveryType" value="Retirada">
-            <span>Retirada</span>
-          </label>
+          <label><input type="radio" name="deliveryType" value="Entrega" checked><span>Entrega</span></label>
+          <label><input type="radio" name="deliveryType" value="Retirada"><span>Retirada</span></label>
         </div>
       </div>
-
       <div id="addressFields">
-        <label>
-          Endereço
-          <input id="address" name="address" type="text" autocomplete="street-address" placeholder="Rua, número, bairro">
-        </label>
-
-        <label>
-          Ponto de referência
-          <input id="reference" name="reference" type="text" placeholder="Ex.: perto da praça">
-        </label>
+        <label>Endereço<input id="address" name="address" type="text" autocomplete="street-address" placeholder="Rua, número, bairro"></label>
+        <label>Ponto de referência<input id="reference" name="reference" type="text" placeholder="Ex.: perto da praça"></label>
       </div>
-
-      <label>
-        Forma de pagamento
+      <label>Forma de pagamento
         <select id="payment" name="payment" required>
-          <option value="">Selecione</option>
-          <option value="Pix">Pix</option>
-          <option value="Cartão">Cartão</option>
-          <option value="Dinheiro">Dinheiro</option>
+          <option value="">Selecione</option><option value="Pix">Pix</option><option value="Cartão">Cartão</option><option value="Dinheiro">Dinheiro</option>
         </select>
       </label>
-
-      <label id="changeWrap" hidden>
-        Troco para quanto?
-        <input id="changeFor" name="changeFor" inputmode="decimal" placeholder="Ex.: 50,00">
-      </label>
-
-      <label>
-        Observação
-        <textarea id="orderNote" name="orderNote" rows="3" placeholder="Ex.: sem cebola, molho separado..."></textarea>
-      </label>
-
-      <div class="checkout-total">
-        <span>Total do pedido</span>
-        <strong id="checkoutTotal">R$ 0,00</strong>
-      </div>
-
-      <button class="whatsapp-button" type="submit">
-        Enviar pedido no WhatsApp
-      </button>
-
-      <p class="form-note">
-        O WhatsApp abrirá com o pedido, endereço e pagamento preenchidos. Basta tocar em enviar.
-      </p>
+      <label id="changeWrap" hidden>Troco para quanto?<input id="changeFor" name="changeFor" inputmode="decimal" placeholder="Ex.: 50,00"></label>
+      <label>Observação<textarea id="orderNote" name="orderNote" rows="3" placeholder="Ex.: sem cebola, molho separado..."></textarea></label>
+      <div class="checkout-total"><span>Total do pedido</span><strong id="checkoutTotal">R$ 0,00</strong></div>
+      <button class="whatsapp-button" type="submit">Enviar pedido no WhatsApp</button>
+      <p class="form-note">O WhatsApp abrirá com o pedido preenchido. Basta tocar em enviar.</p>
     </form>
   </section>
 
-  <footer>
-    <strong>Lendários</strong>
-    <span>Cardápio digital · 24 horas</span>
-  </footer>
-
+  <footer><strong>Lanchonete</strong><span>Cardápio digital · 24 horas</span></footer>
   <script src="script.js"></script>
 </body>
 </html>

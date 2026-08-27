@@ -1,33 +1,19 @@
-# Site Lendários
+# Lanchonete Site
 
-Cardápio digital estático, pronto para GitHub e Cloudflare Pages.
+Cardápio digital com carrinho, pedido pelo WhatsApp e área administrativa de promoções.
 
-## Como publicar
-1. Extraia o ZIP.
-2. Envie todos os arquivos para a raiz do seu repositório Git.
-3. No Cloudflare Pages, conecte o repositório.
-4. Como é um site estático, não precisa de comando de build.
+## Área do dono
+Acesse `/admin.html`.
+
+A página não tem link no cardápio público. Para funcionar de verdade, configure no Cloudflare Pages:
+
+1. Crie um namespace de Workers KV.
+2. Adicione ao projeto um KV binding chamado `PROMOTIONS`.
+3. Crie uma variável/segredo chamada `ADMIN_PASSWORD` com a senha do dono.
+4. Faça um novo deploy.
+
+Depois disso, o dono consegue enviar a foto da promoção, colocar título e descrição e publicar ou ocultar.
 
 ## WhatsApp
-Número configurado:
-- (92) 99515-9975
-- Código usado: 5592995159975
-
-O pedido envia:
-- nome do cliente;
-- entrega ou retirada;
-- endereço;
-- ponto de referência;
-- itens e quantidades;
-- total;
-- forma de pagamento;
-- troco (quando dinheiro);
-- observação.
-
-## Fotos dos produtos
-As imagens atuais foram aproveitadas do cardápio fornecido.
-Quando tiver fotos reais dos lanches, substitua:
-- `assets/lanche.jpg`
-- `assets/hero-burger.jpg`
-
-Se quiser fotos diferentes por produto, basta alterar o array de produtos e incluir um campo de imagem.
+Número configurado: (92) 99515-9975.
+A mensagem foi alterada para não usar emojis, evitando os caracteres quebrados exibidos anteriormente.

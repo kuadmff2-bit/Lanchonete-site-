@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d0d0d">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Admin | Lanchonete</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-head">
+      <div><span>ÁREA DO DONO</span><h1>Promoção</h1><p>Publique uma promoção simples no cardápio.</p></div>
+      <a href="/" class="back-link">Ver site</a>
+    </header>
+    <section class="admin-card">
+      <form id="promoForm">
+        <label>Senha de administrador<input id="adminPassword" type="password" autocomplete="current-password" placeholder="Sua senha" required></label>
+        <label>Título da promoção<input id="promoTitle" type="text" maxlength="80" placeholder="Ex.: 2 X-Salada por R$ 10,00" required></label>
+        <label>Pequena descrição<textarea id="promoDescription" rows="3" maxlength="240" placeholder="Ex.: Promoção válida enquanto durar o estoque."></textarea></label>
+        <label>Foto da promoção<input id="promoImage" type="file" accept="image/jpeg,image/png,image/webp"><small>A imagem será reduzida automaticamente antes de publicar.</small></label>
+        <div class="preview" id="preview" hidden><img id="previewImage" alt="Prévia da promoção"><div><span>PROMOÇÃO</span><strong id="previewTitle"></strong><p id="previewDescription"></p></div></div>
+        <label class="toggle"><input id="promoActive" type="checkbox" checked><span>Mostrar promoção no site</span></label>
+        <button type="submit" class="save-button" id="saveButton">Publicar promoção</button>
+        <button type="button" class="secondary-button" id="hideButton">Ocultar promoção atual</button>
+        <p class="status" id="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <p class="security-note">Esta página não aparece no cardápio público. O acesso é protegido por uma senha configurada no Cloudflare.</p>
+  </main>
+  <script src="admin.js"></script>
+</body>
+</html>
