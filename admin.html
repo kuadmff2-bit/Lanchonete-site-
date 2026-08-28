@@ -39,7 +39,7 @@
 
       <section class="tab-panel active" id="tab-dashboard">
         <div class="panel-heading"><div><span>RESUMO</span><h2>Pedidos</h2></div><button type="button" class="secondary-small" id="refreshOrders">Atualizar</button></div>
-        <p class="panel-note">Os números contam quando o cliente toca em “Enviar pedido no WhatsApp”.</p>
+        <p class="panel-note">Os números contam os pedidos registrados pelo site. Pedidos cancelados deixam de entrar nos totais.</p>
         <div class="stats-grid">
           <article class="stat-card"><small>Pedidos hoje</small><strong id="todayOrders">0</strong></article>
           <article class="stat-card"><small>Total de pedidos</small><strong id="totalOrders">0</strong></article>
@@ -47,7 +47,7 @@
           <article class="stat-card"><small>Valor acumulado</small><strong id="totalValue">R$ 0,00</strong></article>
         </div>
         <div class="admin-card recent-card">
-          <div class="card-title"><h3>Pedidos recentes</h3><span>últimos 40</span></div>
+          <div class="card-title"><h3>Pedidos recentes</h3><span>últimos 80</span></div>
           <div id="recentOrders" class="recent-orders"><p class="empty-admin">Ainda não há pedidos registrados.</p></div>
         </div>
         <p class="status" id="dashboardStatus" aria-live="polite"></p>
@@ -166,6 +166,7 @@
     });
   </script>
   <script src="admin.js"></script>
+  <script src="admin-orders.js"></script>
   <script src="admin-extra.js"></script>
   <script src="admin-reset.js"></script>
 </body>
