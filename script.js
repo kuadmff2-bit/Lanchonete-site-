@@ -36,6 +36,7 @@ const goCheckoutBtn = $("#goCheckout");
 const checkoutModal = $("#checkoutModal");
 const checkoutBackdrop = $("#checkoutBackdrop");
 const checkoutForm = $("#checkoutForm");
+const checkoutButton = checkoutForm.querySelector('.whatsapp-button');
 const paymentEl = $("#payment");
 const changeWrap = $("#changeWrap");
 const changeFor = $("#changeFor");
@@ -137,15 +138,15 @@ function syncPaymentFields() { const isCash = paymentEl.value === "Dinheiro"; ch
 function orderItems() {
   return [...cart.entries()].map(([id, qty]) => {
     const product = products.find((item) => String(item.id) === String(id));
-    return product ? { name: product.name, qty, price: Number(product.price) } : null;
+    return product ? { id: String(product.id), name: product.name, qty, price: Number(product.price) } : null;
   }).filter(Boolean);
 }
 
-function buildWhatsAppMessage(formData) {
-  const { total } = cartDetails();
+function buildWhatsAppMessage(formData, registeredOrder) {
+  const total = Number(registeredOrder?.total ?? cartDetails().total);
   const deliveryType = formData.get("deliveryType");
   const payment = formData.get("payment");
-  const lines = ["*NOVO PEDIDO - LANCHONETE*", "", `*Cliente:* ${formData.get("customerName").trim()}`, `*Recebimento:* ${deliveryType}`];
+  const lines = ["*NOVO PEDIDO - LANCHONETE*", `*Pedido:* ${registeredOrder?.id || ""}`, "", `*Cliente:* ${formData.get("customerName").trim()}`, `*Recebimento:* ${deliveryType}`];
   if (deliveryType === "Entrega") {
     lines.push(`*Endereço:* ${formData.get("address").trim()}`);
     const reference = formData.get("reference").trim();
@@ -160,7 +161,7 @@ function buildWhatsAppMessage(formData) {
   }
   const note = formData.get("orderNote").trim();
   if (note) lines.push("", `*Observação:* ${note}`);
-  lines.push("", "Pedido feito pelo cardápio digital da Lanchonete.");
+  lines.push("", "Pedido registrado pelo cardápio digital da Lanchonete.");
   return lines.join("\n");
 }
 
@@ -169,19 +170,34 @@ function localDateKey() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function registerOrder(formData) {
-  const { count, total } = cartDetails();
+function clientOrderId() {
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  return `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function registerOrder(formData) {
   const payload = {
+    clientOrderId: clientOrderId(),
     localDate: localDateKey(),
-    total,
-    itemCount: count,
+    customerName: formData.get("customerName"),
     payment: formData.get("payment"),
     deliveryType: formData.get("deliveryType"),
-    items: orderItems().map(({ name, qty }) => ({ name, qty }))
+    address: formData.get("address") || "",
+    reference: formData.get("reference") || "",
+    changeFor: formData.get("changeFor") || "",
+    note: formData.get("orderNote") || "",
+    items: orderItems().map(({ id, name, qty }) => ({ id, name, qty }))
   };
-  try {
-    fetch("/api/orders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), keepalive: true }).catch(() => {});
-  } catch {}
+
+  const response = await fetch("/api/orders", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.order) throw new Error(data.error || "Não foi possível registrar o pedido. Tente novamente.");
+  return data.order;
 }
 
 async function loadPromotion() {
@@ -223,15 +239,40 @@ checkoutBackdrop.addEventListener("click", closeCheckout);
 document.querySelectorAll('input[name="deliveryType"]').forEach((input) => input.addEventListener("change", syncDeliveryFields));
 paymentEl.addEventListener("change", syncPaymentFields);
 
-checkoutForm.addEventListener("submit", (event) => {
+checkoutForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (cart.size === 0) { closeCheckout(); openCart(); return; }
   syncDeliveryFields();
   if (!checkoutForm.reportValidity()) return;
+
   const formData = new FormData(checkoutForm);
-  registerOrder(formData);
-  const message = buildWhatsAppMessage(formData);
-  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
+  const popup = window.open("about:blank", "_blank");
+  const originalText = checkoutButton.textContent;
+  checkoutButton.disabled = true;
+  checkoutButton.textContent = "Registrando pedido...";
+
+  try {
+    const registeredOrder = await registerOrder(formData);
+    const message = buildWhatsAppMessage(formData, registeredOrder);
+    const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+
+    checkoutButton.textContent = `Pedido ${registeredOrder.id} registrado`;
+    if (popup) popup.location.href = whatsappUrl;
+    else window.location.href = whatsappUrl;
+
+    cart.clear();
+    checkoutForm.reset();
+    renderCart();
+    syncDeliveryFields();
+    syncPaymentFields();
+    closeCheckout();
+  } catch (error) {
+    if (popup) popup.close();
+    alert(error.message || "Não foi possível registrar o pedido.");
+  } finally {
+    checkoutButton.disabled = false;
+    checkoutButton.textContent = originalText;
+  }
 });
 
 renderProducts();
