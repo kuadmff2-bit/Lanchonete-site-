@@ -1,4 +1,9 @@
 // Gestão dos pedidos para uso diário da lanchonete.
+const orderStyles = document.createElement("link");
+orderStyles.rel = "stylesheet";
+orderStyles.href = "admin-orders.css";
+document.head.appendChild(orderStyles);
+
 const ORDER_STATUS_LABELS = {
   novo: "Novo",
   confirmado: "Confirmado",
