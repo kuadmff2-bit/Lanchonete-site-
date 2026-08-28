@@ -26,6 +26,8 @@ const DEFAULT_PRODUCTS = [
 const ADMIN_SESSION_COOKIE = "lanchonete_admin_session";
 const ADMIN_SESSION_TTL = 60 * 60 * 24 * 30;
 const ADMIN_APP_MARKER = "LanchoneteAdminApp/";
+const ORDER_STATUSES = new Set(["novo", "confirmado", "preparando", "saiu_entrega", "finalizado", "cancelado"]);
+const MAX_RECENT_ORDERS = 80;
 
 function readCookie(request, name) {
   const cookie = request.headers.get("cookie") || "";
@@ -64,9 +66,7 @@ async function authorized(request, env) {
   const sessionToken = readCookie(request, ADMIN_SESSION_COOKIE);
   if (sessionToken && env.PROMOTIONS) {
     const validSession = await env.PROMOTIONS.get(`admin-session:${sessionToken}`);
-    if (validSession === "1") {
-      return { ok: true, sessionToken, fromSession: true };
-    }
+    if (validSession === "1") return { ok: true, sessionToken, fromSession: true };
   }
 
   const password = request.headers.get("x-admin-password") || "";
@@ -106,17 +106,71 @@ function safeDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : new Date().toISOString().slice(0, 10);
 }
 
+function safeText(value, max = 120) {
+  return String(value || "").trim().slice(0, max);
+}
+
+async function getProducts(env) {
+  if (!env.PROMOTIONS) return DEFAULT_PRODUCTS;
+  const raw = await env.PROMOTIONS.get("products");
+  if (!raw) return DEFAULT_PRODUCTS;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : DEFAULT_PRODUCTS;
+  } catch {
+    return DEFAULT_PRODUCTS;
+  }
+}
+
+async function readStats(env) {
+  const raw = await env.PROMOTIONS.get("order-stats");
+  const base = { totalOrders: 0, totalValue: 0, todayOrders: 0, todayValue: 0, currentDate: "" };
+  try { return raw ? { ...base, ...JSON.parse(raw) } : base; } catch { return base; }
+}
+
+async function readRecentOrders(env) {
+  const raw = await env.PROMOTIONS.get("recent-orders");
+  try {
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeStatsDate(stats, localDate) {
+  if (stats.currentDate !== localDate) {
+    stats.currentDate = localDate;
+    stats.todayOrders = 0;
+    stats.todayValue = 0;
+  }
+  return stats;
+}
+
+function addOrderToStats(stats, order) {
+  normalizeStatsDate(stats, order.localDate);
+  stats.totalOrders = (Number(stats.totalOrders) || 0) + 1;
+  stats.totalValue = Math.max(0, (Number(stats.totalValue) || 0) + Number(order.total || 0));
+  if (stats.currentDate === order.localDate) {
+    stats.todayOrders = (Number(stats.todayOrders) || 0) + 1;
+    stats.todayValue = Math.max(0, (Number(stats.todayValue) || 0) + Number(order.total || 0));
+  }
+  return stats;
+}
+
+function removeOrderFromStats(stats, order) {
+  stats.totalOrders = Math.max(0, (Number(stats.totalOrders) || 0) - 1);
+  stats.totalValue = Math.max(0, (Number(stats.totalValue) || 0) - Number(order.total || 0));
+  if (stats.currentDate === order.localDate) {
+    stats.todayOrders = Math.max(0, (Number(stats.todayOrders) || 0) - 1);
+    stats.todayValue = Math.max(0, (Number(stats.todayValue) || 0) - Number(order.total || 0));
+  }
+  return stats;
+}
+
 async function handleProducts(request, env) {
   if (request.method === "GET") {
-    if (!env.PROMOTIONS) return json({ products: DEFAULT_PRODUCTS, storageConfigured: false });
-    const raw = await env.PROMOTIONS.get("products");
-    if (!raw) return json({ products: DEFAULT_PRODUCTS, storageConfigured: true });
-    try {
-      const parsed = JSON.parse(raw);
-      return json({ products: Array.isArray(parsed) ? parsed : DEFAULT_PRODUCTS, storageConfigured: true });
-    } catch {
-      return json({ products: DEFAULT_PRODUCTS, storageConfigured: true });
-    }
+    return json({ products: await getProducts(env), storageConfigured: Boolean(env.PROMOTIONS) });
   }
 
   if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
@@ -160,8 +214,8 @@ async function handlePromo(request, env) {
   try { data = await request.json(); } catch { return json({ error: "Dados inválidos." }, 400); }
   const promo = {
     active: Boolean(data.active),
-    title: String(data.title || "").trim().slice(0, 80),
-    description: String(data.description || "").trim().slice(0, 240),
+    title: safeText(data.title, 80),
+    description: safeText(data.description, 240),
     image: String(data.image || ""),
     updatedAt: new Date().toISOString()
   };
@@ -172,11 +226,130 @@ async function handlePromo(request, env) {
   return authJson({ ok: true, promotion: promo, storageConfigured: true }, auth);
 }
 
-async function handleOrders(request, env) {
+async function createOrder(request, env) {
+  if (!env.PROMOTIONS) return json({ error: "O sistema de pedidos está temporariamente indisponível." }, 503);
+
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "Dados do pedido inválidos." }, 400); }
+
+  const customerName = safeText(body?.customerName, 80);
+  const deliveryType = body?.deliveryType === "Retirada" ? "Retirada" : "Entrega";
+  const payment = ["Pix", "Cartão", "Dinheiro"].includes(body?.payment) ? body.payment : "";
+  const localDate = safeDate(body?.localDate);
+  const clientOrderId = safeText(body?.clientOrderId, 80).replace(/[^a-zA-Z0-9_-]/g, "");
+
+  if (!customerName) return json({ error: "Informe o nome do cliente." }, 400);
+  if (!payment) return json({ error: "Selecione a forma de pagamento." }, 400);
+  if (deliveryType === "Entrega" && !safeText(body?.address, 160)) return json({ error: "Informe o endereço para entrega." }, 400);
+  if (!Array.isArray(body?.items) || body.items.length === 0 || body.items.length > 30) return json({ error: "O pedido está vazio ou inválido." }, 400);
+
+  if (clientOrderId) {
+    const duplicateRaw = await env.PROMOTIONS.get(`order-dedupe:${clientOrderId}`);
+    if (duplicateRaw) {
+      try {
+        const existing = JSON.parse(duplicateRaw);
+        return json({ ok: true, duplicate: true, order: existing, storageConfigured: true });
+      } catch {}
+    }
+  }
+
+  const catalog = await getProducts(env);
+  const normalizedItems = [];
+  for (const requested of body.items) {
+    const requestedId = safeText(requested?.id, 80);
+    const requestedName = safeText(requested?.name, 80);
+    const product = catalog.find((p) => String(p.id) === requestedId) || catalog.find((p) => p.name === requestedName);
+    const qty = Math.max(1, Math.min(Number(requested?.qty) || 1, 30));
+    if (!product || product.available === false) {
+      return json({ error: `O item ${requestedName || "selecionado"} não está mais disponível. Atualize o cardápio e tente novamente.` }, 409);
+    }
+    normalizedItems.push({
+      id: String(product.id),
+      name: String(product.name),
+      qty,
+      unitPrice: Number(product.price),
+      subtotal: Number(product.price) * qty
+    });
+  }
+
+  const itemCount = normalizedItems.reduce((sum, item) => sum + item.qty, 0);
+  const total = Number(normalizedItems.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2));
+  if (itemCount <= 0 || total < 0 || total > 10000) return json({ error: "O valor do pedido é inválido." }, 400);
+
+  const now = new Date().toISOString();
+  const order = {
+    id: `P${Date.now().toString().slice(-7)}${Math.floor(Math.random() * 90 + 10)}`,
+    clientOrderId,
+    createdAt: now,
+    updatedAt: now,
+    localDate,
+    status: "novo",
+    customerName,
+    deliveryType,
+    address: deliveryType === "Entrega" ? safeText(body?.address, 160) : "",
+    reference: deliveryType === "Entrega" ? safeText(body?.reference, 120) : "",
+    payment,
+    changeFor: payment === "Dinheiro" ? safeText(body?.changeFor, 40) : "",
+    note: safeText(body?.note, 300),
+    total,
+    itemCount,
+    items: normalizedItems
+  };
+
+  const [stats, recent] = await Promise.all([readStats(env), readRecentOrders(env)]);
+  addOrderToStats(stats, order);
+  recent.unshift(order);
+  const trimmed = recent.slice(0, MAX_RECENT_ORDERS);
+
+  const writes = [
+    env.PROMOTIONS.put("order-stats", JSON.stringify(stats)),
+    env.PROMOTIONS.put("recent-orders", JSON.stringify(trimmed))
+  ];
+  if (clientOrderId) writes.push(env.PROMOTIONS.put(`order-dedupe:${clientOrderId}`, JSON.stringify(order), { expirationTtl: 86400 }));
+  await Promise.all(writes);
+
+  return json({ ok: true, order, storageConfigured: true }, 201);
+}
+
+async function updateOrderStatus(request, env, orderId) {
+  const auth = await authorized(request, env);
+  if (!auth.ok) return auth.response;
+  if (!env.PROMOTIONS) return json({ error: "Armazenamento ainda não configurado no Cloudflare." }, 500);
+
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "Dados inválidos." }, 400); }
+  const status = safeText(body?.status, 30);
+  if (!ORDER_STATUSES.has(status)) return json({ error: "Status de pedido inválido." }, 400);
+
+  const [stats, recent] = await Promise.all([readStats(env), readRecentOrders(env)]);
+  const index = recent.findIndex((order) => String(order.id) === String(orderId));
+  if (index < 0) return json({ error: "Pedido não encontrado no histórico recente." }, 404);
+
+  const previous = recent[index];
+  if (previous.status !== "cancelado" && status === "cancelado") removeOrderFromStats(stats, previous);
+  if (previous.status === "cancelado" && status !== "cancelado") addOrderToStats(stats, previous);
+
+  const updated = { ...previous, status, updatedAt: new Date().toISOString() };
+  recent[index] = updated;
+
+  await Promise.all([
+    env.PROMOTIONS.put("order-stats", JSON.stringify(stats)),
+    env.PROMOTIONS.put("recent-orders", JSON.stringify(recent.slice(0, MAX_RECENT_ORDERS)))
+  ]);
+
+  return authJson({ ok: true, order: updated, stats, recent, storageConfigured: true }, auth);
+}
+
+async function handleOrders(request, env, url) {
+  const orderMatch = url.pathname.match(/^\/api\/orders\/([^/]+)$/);
+  if (orderMatch) {
+    if (request.method !== "PATCH") return json({ error: "Método não permitido." }, 405);
+    return updateOrderStatus(request, env, decodeURIComponent(orderMatch[1]));
+  }
+
   if (request.method === "GET") {
     const auth = await authorized(request, env);
     if (!auth.ok) return auth.response;
-
     if (!env.PROMOTIONS) {
       return authJson({
         stats: { totalOrders: 0, totalValue: 0, todayOrders: 0, todayValue: 0, currentDate: "" },
@@ -184,28 +357,18 @@ async function handleOrders(request, env) {
         storageConfigured: false
       }, auth);
     }
-
-    const [statsRaw, recentRaw] = await Promise.all([
-      env.PROMOTIONS.get("order-stats"),
-      env.PROMOTIONS.get("recent-orders")
-    ]);
-    let stats = { totalOrders: 0, totalValue: 0, todayOrders: 0, todayValue: 0, currentDate: "" };
-    let recent = [];
-    try { if (statsRaw) stats = { ...stats, ...JSON.parse(statsRaw) }; } catch {}
-    try { if (recentRaw) recent = JSON.parse(recentRaw); } catch {}
-    return authJson({ stats, recent: Array.isArray(recent) ? recent : [], storageConfigured: true }, auth);
+    const [stats, recent] = await Promise.all([readStats(env), readRecentOrders(env)]);
+    return authJson({ stats, recent, storageConfigured: true }, auth);
   }
 
   if (request.method === "DELETE") {
     const auth = await authorized(request, env);
     if (!auth.ok) return auth.response;
     if (!env.PROMOTIONS) return json({ error: "Armazenamento ainda não configurado no Cloudflare." }, 500);
-
     await Promise.all([
       env.PROMOTIONS.delete("order-stats"),
       env.PROMOTIONS.delete("recent-orders")
     ]);
-
     return authJson({
       ok: true,
       cleared: true,
@@ -215,54 +378,8 @@ async function handleOrders(request, env) {
     }, auth);
   }
 
-  if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
-  if (!env.PROMOTIONS) return json({ ok: false, storageConfigured: false }, 202);
-
-  let body;
-  try { body = await request.json(); } catch { return json({ ok: false }, 400); }
-
-  const total = Math.max(0, Math.min(Number(body?.total) || 0, 10000));
-  const itemCount = Math.max(0, Math.min(Number(body?.itemCount) || 0, 100));
-  const localDate = safeDate(body?.localDate);
-  const items = Array.isArray(body?.items) ? body.items.slice(0, 30).map((item) => ({
-    name: String(item?.name || "").slice(0, 80),
-    qty: Math.max(1, Math.min(Number(item?.qty) || 1, 30))
-  })) : [];
-
-  const statsRaw = await env.PROMOTIONS.get("order-stats");
-  let stats = { totalOrders: 0, totalValue: 0, todayOrders: 0, todayValue: 0, currentDate: localDate };
-  try { if (statsRaw) stats = { ...stats, ...JSON.parse(statsRaw) }; } catch {}
-  if (stats.currentDate !== localDate) {
-    stats.currentDate = localDate;
-    stats.todayOrders = 0;
-    stats.todayValue = 0;
-  }
-  stats.totalOrders = (Number(stats.totalOrders) || 0) + 1;
-  stats.totalValue = (Number(stats.totalValue) || 0) + total;
-  stats.todayOrders = (Number(stats.todayOrders) || 0) + 1;
-  stats.todayValue = (Number(stats.todayValue) || 0) + total;
-
-  const recentRaw = await env.PROMOTIONS.get("recent-orders");
-  let recent = [];
-  try { if (recentRaw) recent = JSON.parse(recentRaw); } catch {}
-  if (!Array.isArray(recent)) recent = [];
-  recent.unshift({
-    id: `P${Date.now().toString().slice(-7)}`,
-    createdAt: new Date().toISOString(),
-    localDate,
-    total,
-    itemCount,
-    payment: String(body?.payment || "").slice(0, 30),
-    deliveryType: String(body?.deliveryType || "").slice(0, 30),
-    items
-  });
-  recent = recent.slice(0, 40);
-
-  await Promise.all([
-    env.PROMOTIONS.put("order-stats", JSON.stringify(stats)),
-    env.PROMOTIONS.put("recent-orders", JSON.stringify(recent))
-  ]);
-  return json({ ok: true, storageConfigured: true });
+  if (request.method === "POST") return createOrder(request, env);
+  return json({ error: "Método não permitido." }, 405);
 }
 
 function localDateKeyForWorker() {
@@ -270,16 +387,19 @@ function localDateKeyForWorker() {
 }
 
 async function handleLogout(request, env) {
-  if (request.method !== "POST" && request.method !== "DELETE") {
-    return json({ error: "Método não permitido." }, 405);
-  }
-
+  if (request.method !== "POST" && request.method !== "DELETE") return json({ error: "Método não permitido." }, 405);
   const sessionToken = readCookie(request, ADMIN_SESSION_COOKIE);
-  if (sessionToken && env.PROMOTIONS) {
-    await env.PROMOTIONS.delete(`admin-session:${sessionToken}`);
-  }
-
+  if (sessionToken && env.PROMOTIONS) await env.PROMOTIONS.delete(`admin-session:${sessionToken}`);
   return json({ ok: true }, 200, { "set-cookie": clearSessionCookie() });
+}
+
+function withSecurityHeaders(response) {
+  const headers = new Headers(response.headers);
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("referrer-policy", "strict-origin-when-cross-origin");
+  headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+  headers.set("x-frame-options", "SAMEORIGIN");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 export default {
@@ -296,8 +416,8 @@ export default {
     if (url.pathname === "/api/logout") return handleLogout(request, env);
     if (url.pathname === "/api/products") return handleProducts(request, env);
     if (url.pathname === "/api/promo") return handlePromo(request, env);
-    if (url.pathname === "/api/orders") return handleOrders(request, env);
+    if (url.pathname === "/api/orders" || url.pathname.startsWith("/api/orders/")) return handleOrders(request, env, url);
 
-    return env.ASSETS.fetch(request);
+    return withSecurityHeaders(await env.ASSETS.fetch(request));
   }
 };
