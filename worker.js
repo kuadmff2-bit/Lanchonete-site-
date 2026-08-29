@@ -110,6 +110,12 @@ function safeText(value, max = 120) {
   return String(value || "").trim().slice(0, max);
 }
 
+function normalizeCustomerPhone(value) {
+  let digits = String(value || "").replace(/\D/g, "").slice(0, 15);
+  if (digits.length === 10 || digits.length === 11) digits = `55${digits}`;
+  return /^55\d{10,11}$/.test(digits) ? digits : "";
+}
+
 function safePrice(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 0;
@@ -259,6 +265,7 @@ async function createOrder(request, env) {
   try { body = await request.json(); } catch { return json({ error: "Dados do pedido inválidos." }, 400); }
 
   const customerName = safeText(body?.customerName, 80);
+  const customerPhone = normalizeCustomerPhone(body?.customerPhone);
   const deliveryType = body?.deliveryType === "Retirada" ? "Retirada" : "Entrega";
   const payment = ["Pix", "Cartão", "Dinheiro"].includes(body?.payment) ? body.payment : "";
   const localDate = safeDate(body?.localDate);
@@ -267,6 +274,7 @@ async function createOrder(request, env) {
   const requestedItems = Array.isArray(body?.items) ? body.items : [];
 
   if (!customerName) return json({ error: "Informe o nome do cliente." }, 400);
+  if (!customerPhone) return json({ error: "Informe um número de WhatsApp válido com DDD." }, 400);
   if (!payment) return json({ error: "Selecione a forma de pagamento." }, 400);
   if (deliveryType === "Entrega" && !safeText(body?.address, 160)) return json({ error: "Informe o endereço para entrega." }, 400);
   if (requestedItems.length > 30) return json({ error: "Há itens demais no pedido." }, 400);
@@ -335,6 +343,7 @@ async function createOrder(request, env) {
     localDate,
     status: "novo",
     customerName,
+    customerPhone,
     deliveryType,
     address: deliveryType === "Entrega" ? safeText(body?.address, 160) : "",
     reference: deliveryType === "Entrega" ? safeText(body?.reference, 120) : "",
