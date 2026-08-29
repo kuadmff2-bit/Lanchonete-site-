@@ -1,0 +1,10 @@
+<resources>
+    <!--
+      Preencher com os dados públicos do app Android no Firebase.
+      Estes valores vêm do projeto Firebase cadastrado para com.lanchonete.admin.
+    -->
+    <string name="firebase_api_key"></string>
+    <string name="firebase_app_id"></string>
+    <string name="firebase_project_id"></string>
+    <string name="firebase_messaging_sender_id"></string>
+</resources>
