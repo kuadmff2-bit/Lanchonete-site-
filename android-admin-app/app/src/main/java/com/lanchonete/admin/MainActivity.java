@@ -17,9 +17,9 @@ import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private static final String ADMIN_URL = "https://lanchonete-site.kuadmff2.workers.dev/admin";
+    private static final String ADMIN_URL = "https://lanchonete-site.kuadmff2.workers.dev/admin?v=20260829-2";
     private static final String ALLOWED_HOST = "lanchonete-site.kuadmff2.workers.dev";
-    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.1";
+    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.2";
     private static final int FILE_CHOOSER_REQUEST = 4102;
 
     private WebView webView;
@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
         configureWebView();
 
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
+            webView.clearCache(true);
             webView.loadUrl(ADMIN_URL);
         }
     }
@@ -52,6 +53,7 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
         String currentUserAgent = settings.getUserAgentString();
         if (currentUserAgent == null) currentUserAgent = "";
@@ -96,6 +98,7 @@ public class MainActivity extends Activity {
                 if (url != null && url.contains("/admin")) {
                     restoreAdminSession();
                     installLogoutHook();
+                    installOrderButtonsFallback();
                 }
             }
         });
@@ -163,6 +166,40 @@ public class MainActivity extends Activity {
                 "b.addEventListener('click',()=>{" +
                 "fetch('/api/logout',{method:'POST',credentials:'include',keepalive:true}).catch(()=>{});" +
                 "});" +
+                "})();";
+
+        webView.evaluateJavascript(script, null);
+    }
+
+    private void installOrderButtonsFallback() {
+        if (webView == null) return;
+
+        String script = "(()=>{" +
+                "if(window.__apkOrderButtonsV2)return;window.__apkOrderButtonsV2=1;" +
+                "const css=document.createElement('style');" +
+                "css.textContent='.apk-order-actions{display:grid;grid-template-columns:1fr;gap:9px;margin-top:10px}.apk-order-btn{min-height:48px;border-radius:12px;border:1px solid #343434;background:#181818;color:#fff;font-weight:800;font-size:13px}.apk-order-btn[data-status=confirmado]{border-color:#4d91db;background:rgba(77,145,219,.12)}.apk-order-btn[data-status=saiu_entrega]{border-color:#9b78e8;background:rgba(155,120,232,.12)}.apk-order-btn[data-status=cancelado]{border-color:#d85d5d;background:rgba(216,93,93,.10);color:#ffb0b0}.apk-order-btn.active{box-shadow:0 0 0 1px currentColor inset}.apk-order-btn:disabled{opacity:.55}';" +
+                "document.head.appendChild(css);" +
+                "const labels={confirmado:'✓ Confirmado',saiu_entrega:'➜ Saiu pra entrega',cancelado:'✕ Cancelado'};" +
+                "function upgrade(){" +
+                "document.querySelectorAll('select[data-order-status]').forEach(s=>{" +
+                "const id=s.dataset.orderStatus||'';const current=s.value||'novo';const label=s.closest('label');if(!label||label.dataset.apkUpgraded==='1')return;" +
+                "label.dataset.apkUpgraded='1';const box=document.createElement('div');box.className='apk-order-actions';" +
+                "Object.entries(labels).forEach(([st,txt])=>{const b=document.createElement('button');b.type='button';b.className='apk-order-btn'+(current===st?' active':'');b.dataset.apkOrderId=id;b.dataset.status=st;b.textContent=txt;box.appendChild(b);});" +
+                "label.replaceWith(box);" +
+                "});" +
+                "}" +
+                "document.addEventListener('click',async(e)=>{" +
+                "const b=e.target.closest('[data-apk-order-id][data-status]');if(!b)return;const id=b.dataset.apkOrderId;const status=b.dataset.status;" +
+                "const group=[...b.parentElement.querySelectorAll('button')];group.forEach(x=>x.disabled=true);" +
+                "try{" +
+                "let data;if(typeof api==='function'){data=await api('/api/orders/'+encodeURIComponent(id),{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status})});}" +
+                "else{const r=await fetch('/api/orders/'+encodeURIComponent(id),{method:'PATCH',headers:{'content-type':'application/json'},credentials:'include',body:JSON.stringify({status})});data=await r.json();if(!r.ok)throw new Error(data.error||'Erro');}" +
+                "if(typeof renderDashboard==='function')renderDashboard(data);setTimeout(upgrade,50);" +
+                "const o=data&&data.order;let p=String(o&&o.customerPhone||'').replace(/\\D/g,'');if(p&&p.length<=11)p='55'+p;" +
+                "if(p&&/^55\\d{10,11}$/.test(p)){let m='';const n=(o.customerName||'Cliente');if(status==='confirmado')m='Olá, '+n+'! Seu pedido '+id+' foi confirmado ✅.';if(status==='saiu_entrega')m=(o.deliveryType==='Retirada'?'Olá, '+n+'! Seu pedido '+id+' está pronto para retirada ✅.':'Olá, '+n+'! Seu pedido '+id+' saiu para entrega 🛵.');if(status==='cancelado')m='Olá, '+n+'. Seu pedido '+id+' foi cancelado.';if(m)location.href='https://wa.me/'+p+'?text='+encodeURIComponent(m);}" +
+                "}catch(err){group.forEach(x=>x.disabled=false);if(typeof setStatus==='function')setStatus('#dashboardStatus',err.message||'Não foi possível mudar o status.','error');}" +
+                "});" +
+                "new MutationObserver(upgrade).observe(document.documentElement,{childList:true,subtree:true});upgrade();" +
                 "})();";
 
         webView.evaluateJavascript(script, null);
