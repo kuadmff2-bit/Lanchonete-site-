@@ -10,9 +10,31 @@ async function authorizeWithBaseWorker(request, env, ctx) {
   return baseWorker.fetch(authRequest, env, ctx);
 }
 
+function publicFirebaseConfig(env) {
+  const config = {
+    apiKey: String(env.FCM_ANDROID_API_KEY || ""),
+    appId: String(env.FCM_ANDROID_APP_ID || ""),
+    projectId: String(env.FCM_PROJECT_ID || ""),
+    senderId: String(env.FCM_SENDER_ID || "")
+  };
+  return new Response(JSON.stringify({
+    ...config,
+    configured: Boolean(config.apiKey && config.appId && config.projectId && config.senderId)
+  }), {
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store"
+    }
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/push/config" && request.method === "GET") {
+      return publicFirebaseConfig(env);
+    }
 
     if (url.pathname === "/api/push/register") {
       const authResponse = await authorizeWithBaseWorker(request, env, ctx);
