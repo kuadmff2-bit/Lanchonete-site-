@@ -52,7 +52,6 @@
 
   const originalRenderCart = renderCart;
   renderCart = function () {
-    if (!cart.has(PROMO_CART_KEY)) activePromotion = null;
     originalRenderCart();
 
     if (promotionSelected()) {
@@ -214,7 +213,6 @@
     event.preventDefault();
     event.stopPropagation();
     cart.delete(PROMO_CART_KEY);
-    activePromotion = null;
     renderCart();
   });
 
