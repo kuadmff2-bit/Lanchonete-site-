@@ -1,1 +1,2 @@
-Forçar novo deploy do Cloudflare após atualização de promoções clicáveis.
+Forçar novo deploy do Cloudflare após atualização dos botões de status e avisos de WhatsApp ao cliente.
+Atualização: 2026-08-29 13:06 BRT.
