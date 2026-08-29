@@ -110,6 +110,12 @@ function safeText(value, max = 120) {
   return String(value || "").trim().slice(0, max);
 }
 
+function safePrice(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Number(Math.max(0, Math.min(number, 10000)).toFixed(2));
+}
+
 async function getProducts(env) {
   if (!env.PROMOTIONS) return DEFAULT_PRODUCTS;
   const raw = await env.PROMOTIONS.get("products");
@@ -119,6 +125,18 @@ async function getProducts(env) {
     return Array.isArray(parsed) ? parsed : DEFAULT_PRODUCTS;
   } catch {
     return DEFAULT_PRODUCTS;
+  }
+}
+
+async function getPromotion(env) {
+  if (!env.PROMOTIONS) return null;
+  const raw = await env.PROMOTIONS.get("current-promotion");
+  if (!raw) return null;
+  try {
+    const promo = JSON.parse(raw);
+    return promo && typeof promo === "object" ? promo : null;
+  } catch {
+    return null;
   }
 }
 
@@ -190,11 +208,9 @@ async function handleProducts(request, env) {
 
 async function handlePromo(request, env) {
   if (request.method === "GET") {
-    if (!env.PROMOTIONS) return json({ active: false, storageConfigured: false });
-    const raw = await env.PROMOTIONS.get("current-promotion");
-    if (!raw) return json({ active: false, storageConfigured: true });
-    try { return json({ ...JSON.parse(raw), storageConfigured: true }); }
-    catch { return json({ active: false, storageConfigured: true }); }
+    if (!env.PROMOTIONS) return json({ active: false, orderEnabled: false, storageConfigured: false });
+    const promo = await getPromotion(env);
+    return json(promo ? { ...promo, storageConfigured: true } : { active: false, orderEnabled: false, storageConfigured: true });
   }
 
   if (request.method === "DELETE") {
@@ -212,16 +228,26 @@ async function handlePromo(request, env) {
 
   let data;
   try { data = await request.json(); } catch { return json({ error: "Dados inválidos." }, 400); }
+
+  const previous = await getPromotion(env);
+  const price = safePrice(data.price);
+  const orderEnabled = Boolean(data.orderEnabled);
   const promo = {
+    id: safeText(previous?.id, 100) || `PROMO-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`,
     active: Boolean(data.active),
     title: safeText(data.title, 80),
     description: safeText(data.description, 240),
     image: String(data.image || ""),
+    price,
+    orderEnabled,
     updatedAt: new Date().toISOString()
   };
-  if (promo.active && !promo.title) return json({ error: "Informe o título da promoção." }, 400);
+
+  if ((promo.active || promo.orderEnabled) && !promo.title) return json({ error: "Informe o título da promoção." }, 400);
+  if (promo.orderEnabled && promo.price <= 0) return json({ error: "Informe um valor maior que zero para o pedido direto." }, 400);
   if (promo.image && !promo.image.startsWith("data:image/")) return json({ error: "Formato de imagem inválido." }, 400);
   if (promo.image.length > 1500000) return json({ error: "A imagem ficou muito grande." }, 413);
+
   await env.PROMOTIONS.put("current-promotion", JSON.stringify(promo));
   return authJson({ ok: true, promotion: promo, storageConfigured: true }, auth);
 }
@@ -237,11 +263,14 @@ async function createOrder(request, env) {
   const payment = ["Pix", "Cartão", "Dinheiro"].includes(body?.payment) ? body.payment : "";
   const localDate = safeDate(body?.localDate);
   const clientOrderId = safeText(body?.clientOrderId, 80).replace(/[^a-zA-Z0-9_-]/g, "");
+  const requestedPromoId = safeText(body?.promoId, 100);
+  const requestedItems = Array.isArray(body?.items) ? body.items : [];
 
   if (!customerName) return json({ error: "Informe o nome do cliente." }, 400);
   if (!payment) return json({ error: "Selecione a forma de pagamento." }, 400);
   if (deliveryType === "Entrega" && !safeText(body?.address, 160)) return json({ error: "Informe o endereço para entrega." }, 400);
-  if (!Array.isArray(body?.items) || body.items.length === 0 || body.items.length > 30) return json({ error: "O pedido está vazio ou inválido." }, 400);
+  if (requestedItems.length > 30) return json({ error: "Há itens demais no pedido." }, 400);
+  if (requestedItems.length === 0 && !requestedPromoId) return json({ error: "O pedido está vazio ou inválido." }, 400);
 
   if (clientOrderId) {
     const duplicateRaw = await env.PROMOTIONS.get(`order-dedupe:${clientOrderId}`);
@@ -255,7 +284,8 @@ async function createOrder(request, env) {
 
   const catalog = await getProducts(env);
   const normalizedItems = [];
-  for (const requested of body.items) {
+
+  for (const requested of requestedItems) {
     const requestedId = safeText(requested?.id, 80);
     const requestedName = safeText(requested?.name, 80);
     const product = catalog.find((p) => String(p.id) === requestedId) || catalog.find((p) => p.name === requestedName);
@@ -268,7 +298,27 @@ async function createOrder(request, env) {
       name: String(product.name),
       qty,
       unitPrice: Number(product.price),
-      subtotal: Number(product.price) * qty
+      subtotal: Number(product.price) * qty,
+      type: "product"
+    });
+  }
+
+  let promotionId = "";
+  if (requestedPromoId) {
+    const promo = await getPromotion(env);
+    const promoPrice = safePrice(promo?.price);
+    if (!promo || !promo.active || !promo.orderEnabled || !promo.id || String(promo.id) !== requestedPromoId || promoPrice <= 0) {
+      return json({ error: "Essa promoção mudou ou não está mais disponível. Atualize a página e tente novamente." }, 409);
+    }
+    promotionId = String(promo.id);
+    normalizedItems.unshift({
+      id: `promo:${promotionId}`,
+      name: `Promoção: ${safeText(promo.title, 80) || "Oferta especial"}`,
+      qty: 1,
+      unitPrice: promoPrice,
+      subtotal: promoPrice,
+      type: "promotion",
+      promotionId
     });
   }
 
@@ -291,6 +341,7 @@ async function createOrder(request, env) {
     payment,
     changeFor: payment === "Dinheiro" ? safeText(body?.changeFor, 40) : "",
     note: safeText(body?.note, 300),
+    promotionId,
     total,
     itemCount,
     items: normalizedItems
