@@ -13,10 +13,68 @@ const ORDER_STATUS_LABELS = {
   cancelado: "Cancelado"
 };
 
-function orderStatusOptions(current) {
-  return Object.entries(ORDER_STATUS_LABELS).map(([value, label]) =>
-    `<option value="${value}" ${value === current ? "selected" : ""}>${label}</option>`
-  ).join("");
+const ORDER_ACTIONS = [
+  { status: "confirmado", label: "✓ Confirmado", className: "confirmado" },
+  { status: "saiu_entrega", label: "➜ Saiu pra entrega", className: "entrega" },
+  { status: "cancelado", label: "✕ Cancelado", className: "cancelado" }
+];
+
+function orderActionButtons(orderId, currentStatus) {
+  return ORDER_ACTIONS.map(({ status, label, className }) => `
+    <button
+      type="button"
+      class="order-action-button action-${className}${currentStatus === status ? " is-active" : ""}"
+      data-order-id="${esc(orderId)}"
+      data-order-status="${status}"
+      aria-pressed="${currentStatus === status ? "true" : "false"}"
+    >${label}</button>
+  `).join("");
+}
+
+function normalizeWhatsAppPhone(value) {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 10 || digits.length === 11) digits = `55${digits}`;
+  return /^55\d{10,11}$/.test(digits) ? digits : "";
+}
+
+function formatWhatsAppPhone(value) {
+  const phone = normalizeWhatsAppPhone(value);
+  if (!phone) return "";
+  const local = phone.slice(2);
+  const ddd = local.slice(0, 2);
+  const number = local.slice(2);
+  if (number.length === 9) return `(${ddd}) ${number.slice(0, 5)}-${number.slice(5)}`;
+  return `(${ddd}) ${number.slice(0, 4)}-${number.slice(4)}`;
+}
+
+function customerStatusMessage(order, status) {
+  const name = String(order?.customerName || "Cliente").trim();
+  const orderId = String(order?.id || "").trim();
+
+  if (status === "confirmado") {
+    return `Olá, ${name}! Seu pedido ${orderId} foi confirmado ✅. Já estamos cuidando dele.`;
+  }
+
+  if (status === "saiu_entrega") {
+    if (order?.deliveryType === "Retirada") {
+      return `Olá, ${name}! Seu pedido ${orderId} está pronto para retirada ✅.`;
+    }
+    return `Olá, ${name}! Seu pedido ${orderId} saiu para entrega 🛵. Em breve chega até você.`;
+  }
+
+  if (status === "cancelado") {
+    return `Olá, ${name}. Seu pedido ${orderId} foi cancelado. Se precisar de ajuda, fale com a lanchonete por aqui.`;
+  }
+
+  return "";
+}
+
+function openCustomerWhatsApp(order, status) {
+  const phone = normalizeWhatsAppPhone(order?.customerPhone);
+  const message = customerStatusMessage(order, status);
+  if (!phone || !message) return false;
+  window.location.href = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  return true;
 }
 
 renderDashboard = function (data) {
@@ -40,6 +98,10 @@ renderDashboard = function (data) {
       ? `<small class="order-detail"><b>Entrega:</b> ${esc(order.address)}${order.reference ? ` · Ref.: ${esc(order.reference)}` : ""}</small>`
       : `<small class="order-detail"><b>${esc(order.deliveryType || "Pedido")}</b></small>`;
     const note = order.note ? `<small class="order-detail"><b>Obs.:</b> ${esc(order.note)}</small>` : "";
+    const phone = formatWhatsAppPhone(order.customerPhone);
+    const phoneInfo = phone
+      ? `<small class="order-detail order-phone"><b>WhatsApp:</b> ${esc(phone)}</small>`
+      : `<small class="order-detail order-phone missing"><b>WhatsApp:</b> não informado neste pedido</small>`;
 
     return `<article class="recent-order order-card status-${status}">
       <div class="recent-order-id">
@@ -49,6 +111,7 @@ renderDashboard = function (data) {
       </div>
       <div class="recent-order-main">
         <strong>${esc(order.customerName || "Cliente")}</strong>
+        ${phoneInfo}
         <small>${itemText}</small>
         <small class="order-detail">${esc(order.deliveryType || "")} · ${esc(order.payment || "")}</small>
         ${deliveryInfo}
@@ -56,9 +119,9 @@ renderDashboard = function (data) {
       </div>
       <div class="recent-order-side">
         <strong class="recent-order-total">${money(order.total)}</strong>
-        <label class="order-status-control">Status
-          <select data-order-status="${esc(order.id)}">${orderStatusOptions(status)}</select>
-        </label>
+        <div class="order-status-actions" aria-label="Ações do pedido ${esc(order.id || "")}">
+          ${orderActionButtons(order.id || "", status)}
+        </div>
       </div>
     </article>`;
   }).join("") : '<p class="empty-admin">Ainda não há pedidos registrados.</p>';
@@ -68,13 +131,15 @@ renderDashboard = function (data) {
   if (counter) counter.textContent = count === 1 ? "1 pedido" : `${count} pedidos recentes`;
 };
 
-$("#recentOrders").addEventListener("change", async (event) => {
-  const select = event.target.closest("[data-order-status]");
-  if (!select) return;
+$("#recentOrders").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-order-status][data-order-id]");
+  if (!button) return;
 
-  const orderId = select.dataset.orderStatus;
-  const status = select.value;
-  select.disabled = true;
+  const orderId = button.dataset.orderId;
+  const status = button.dataset.orderStatus;
+  const card = button.closest(".order-card");
+  const actionButtons = card ? [...card.querySelectorAll("[data-order-status][data-order-id]")] : [button];
+  actionButtons.forEach((item) => { item.disabled = true; });
   setStatus("#dashboardStatus", `Atualizando ${orderId}...`);
 
   try {
@@ -84,7 +149,13 @@ $("#recentOrders").addEventListener("change", async (event) => {
       body: JSON.stringify({ status })
     });
     renderDashboard(data);
-    setStatus("#dashboardStatus", `Pedido ${orderId}: ${ORDER_STATUS_LABELS[status]}.`, "ok");
+
+    const updatedOrder = data?.order || {};
+    if (openCustomerWhatsApp(updatedOrder, status)) {
+      setStatus("#dashboardStatus", `Pedido ${orderId}: ${ORDER_STATUS_LABELS[status]}. Abrindo mensagem para o cliente...`, "ok");
+    } else {
+      setStatus("#dashboardStatus", `Pedido ${orderId}: ${ORDER_STATUS_LABELS[status]}. Este pedido não tem WhatsApp salvo.`, "ok");
+    }
   } catch (error) {
     setStatus("#dashboardStatus", error.message || "Não foi possível mudar o status.", "error");
     await refreshOrders();
