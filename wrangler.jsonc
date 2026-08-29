@@ -7,6 +7,12 @@
   "secrets": {
     "required": ["ADMIN_PASSWORD"]
   },
+  "vars": {
+    "FCM_PROJECT_ID": "lanchonete-admin",
+    "FCM_ANDROID_API_KEY": "AIzaSyBxBWHnh0y5sExe81CIoQ6cV6czDFIHDGs",
+    "FCM_ANDROID_APP_ID": "1:35803389315:android:2d8d6884073057cb05aab6",
+    "FCM_SENDER_ID": "35803389315"
+  },
   "kv_namespaces": [
     {
       "binding": "PROMOTIONS"
