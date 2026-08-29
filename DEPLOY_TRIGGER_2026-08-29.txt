@@ -1,2 +1,2 @@
-Forçar novo deploy do Cloudflare após atualização dos botões de status e avisos de WhatsApp ao cliente.
-Atualização: 2026-08-29 13:06 BRT.
+Forçar novo deploy do Cloudflare após atualização da abertura direta do WhatsApp nos pedidos.
+Atualização: 2026-08-29 13:42 BRT.
