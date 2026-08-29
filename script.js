@@ -146,7 +146,8 @@ function buildWhatsAppMessage(formData, registeredOrder) {
   const total = Number(registeredOrder?.total ?? cartDetails().total);
   const deliveryType = formData.get("deliveryType");
   const payment = formData.get("payment");
-  const lines = ["*NOVO PEDIDO - LANCHONETE*", `*Pedido:* ${registeredOrder?.id || ""}`, "", `*Cliente:* ${formData.get("customerName").trim()}`, `*Recebimento:* ${deliveryType}`];
+  const customerPhone = String(formData.get("customerPhone") || "").trim();
+  const lines = ["*NOVO PEDIDO - LANCHONETE*", `*Pedido:* ${registeredOrder?.id || ""}`, "", `*Cliente:* ${formData.get("customerName").trim()}`, `*WhatsApp:* ${customerPhone}`, `*Recebimento:* ${deliveryType}`];
   if (deliveryType === "Entrega") {
     lines.push(`*Endereço:* ${formData.get("address").trim()}`);
     const reference = formData.get("reference").trim();
@@ -180,6 +181,7 @@ async function registerOrder(formData) {
     clientOrderId: clientOrderId(),
     localDate: localDateKey(),
     customerName: formData.get("customerName"),
+    customerPhone: formData.get("customerPhone"),
     payment: formData.get("payment"),
     deliveryType: formData.get("deliveryType"),
     address: formData.get("address") || "",
