@@ -22,7 +22,7 @@ public final class PushClient {
     private static final String BASE_URL = "https://lanchonete-site.kuadmff2.workers.dev";
     private static final String REGISTER_URL = BASE_URL + "/api/push/register";
     private static final String CONFIG_URL = BASE_URL + "/api/push/config";
-    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.3";
+    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.2";
 
     private static volatile boolean configRequestInProgress = false;
     private static volatile long nextConfigAttemptAt = 0L;
