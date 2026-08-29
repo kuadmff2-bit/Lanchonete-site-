@@ -1,4 +1,6 @@
 worker.js
+worker-fcm.js
+push.js
 wrangler.jsonc
 functions/
 README.md
