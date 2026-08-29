@@ -1,2 +1,3 @@
 Forçar novo deploy do painel e cardápio.
 Atualização: promoção sem checkboxes, sempre visível; disponibilidade controlada por botões.
+Novo deploy forçado após configuração das variáveis FCM no Cloudflare em 2026-08-29.
