@@ -7,6 +7,7 @@
   <meta name="robots" content="noindex,nofollow">
   <title>Admin | Lanchonete</title>
   <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="promo-order-admin.css">
 </head>
 <body>
   <main class="admin-shell">
@@ -98,8 +99,15 @@
         <div class="panel-heading"><div><span>DESTAQUE</span><h2>Promoção</h2></div></div>
         <section class="admin-card promo-admin-card">
           <form id="promoForm">
-            <label>Título da promoção<input id="promoTitle" type="text" maxlength="80" placeholder="Ex.: 2 X-Salada por R$ 10,00" required></label>
-            <label>Pequena descrição<textarea id="promoDescription" rows="3" maxlength="240" placeholder="Ex.: Promoção válida enquanto durar o estoque."></textarea></label>
+            <label>Título da promoção<input id="promoTitle" type="text" maxlength="80" placeholder="Ex.: 3 X-Salada + refrigerante" required></label>
+            <label>Pequena descrição<textarea id="promoDescription" rows="3" maxlength="240" placeholder="Ex.: Combo promocional válido hoje."></textarea></label>
+
+            <div class="promo-order-settings">
+              <strong>Pedido direto pela promoção</strong>
+              <p>Defina o valor final do combo. Quando ativado, o cliente toca na promoção e vai direto para preencher os dados do pedido.</p>
+              <label>Valor da promoção<input id="promoPrice" type="number" min="0" max="10000" step="0.01" inputmode="decimal" placeholder="Ex.: 20,00"></label>
+              <label class="toggle"><input id="promoOrderEnabled" type="checkbox"><span>Ao tocar na promoção, abrir o pedido com este valor</span></label>
+            </div>
 
             <div class="image-field">
               <span class="field-title">Foto da promoção</span>
@@ -116,7 +124,7 @@
               <small class="field-hint">Depois de escolher, você pode recortar, aproximar e reposicionar a foto.</small>
             </div>
 
-            <div class="preview" id="preview" hidden><img id="previewImage" alt="Prévia da promoção"><div><span>PROMOÇÃO</span><strong id="previewTitle"></strong><p id="previewDescription"></p></div></div>
+            <div class="preview" id="preview" hidden><img id="previewImage" alt="Prévia da promoção"><div><span>PROMOÇÃO</span><strong id="previewTitle"></strong><p id="previewDescription"></p><strong class="promo-order-preview-price" id="previewPromoPrice" hidden></strong><small class="promo-order-preview-hint" id="previewPromoHint"></small></div></div>
             <label class="toggle"><input id="promoActive" type="checkbox" checked><span>Mostrar promoção no site</span></label>
             <button type="submit" class="save-button" id="promoSaveButton">Publicar promoção</button>
             <button type="button" class="secondary-button" id="hidePromoButton">Ocultar promoção atual</button>
@@ -168,6 +176,7 @@
   <script src="admin.js"></script>
   <script src="admin-orders.js"></script>
   <script src="admin-extra.js"></script>
+  <script src="promo-order-admin.js"></script>
   <script src="admin-reset.js"></script>
 </body>
 </html>
