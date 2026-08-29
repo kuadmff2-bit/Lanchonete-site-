@@ -81,6 +81,7 @@
       clientOrderId: clientOrderId(),
       localDate: localDateKey(),
       customerName: formData.get("customerName"),
+      customerPhone: formData.get("customerPhone"),
       payment: formData.get("payment"),
       deliveryType: formData.get("deliveryType"),
       address: formData.get("address") || "",
@@ -106,11 +107,13 @@
     const total = Number(registeredOrder?.total ?? cartDetails().total);
     const deliveryType = formData.get("deliveryType");
     const payment = formData.get("payment");
+    const customerPhone = String(formData.get("customerPhone") || "").trim();
     const lines = [
       "*NOVO PEDIDO - LANCHONETE*",
       `*Pedido:* ${registeredOrder?.id || ""}`,
       "",
       `*Cliente:* ${formData.get("customerName").trim()}`,
+      `*WhatsApp:* ${customerPhone}`,
       `*Recebimento:* ${deliveryType}`
     ];
 
