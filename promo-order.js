@@ -170,19 +170,30 @@
       $("#promoDescription").textContent = promo.description || "";
 
       const price = Number(promo.price || 0);
-      const orderEnabled = Boolean(promo.orderEnabled && promo.id && Number.isFinite(price) && price > 0);
+      const hasPrice = Number.isFinite(price) && price > 0;
+      const orderEnabled = Boolean(promo.orderEnabled && promo.id && hasPrice);
       activePromotion = orderEnabled ? { ...promo, price, orderEnabled: true } : null;
 
-      promoOrderMeta.hidden = !orderEnabled;
+      promoOrderMeta.hidden = !hasPrice;
+      if (hasPrice) promoOrderPrice.textContent = money(price);
+
       if (orderEnabled) {
-        promoOrderPrice.textContent = money(price);
+        promoOrderButton.disabled = false;
         promoOrderButton.textContent = `Pedir esta promoção · ${money(price)}`;
+        const hint = promoOrderMeta.querySelector(".promo-order-hint");
+        if (hint) hint.textContent = "Toque em qualquer parte da promoção para ir direto ao pedido.";
         promoCard.classList.add("promo-orderable");
+        promoCard.classList.remove("promo-unavailable");
         promoCard.setAttribute("role", "button");
         promoCard.setAttribute("tabindex", "0");
         promoCard.setAttribute("aria-label", `Pedir ${promo.title} por ${money(price)}`);
       } else {
+        promoOrderButton.disabled = true;
+        promoOrderButton.textContent = "Promoção indisponível";
+        const hint = promoOrderMeta.querySelector(".promo-order-hint");
+        if (hint) hint.textContent = "Esta promoção está indisponível para pedidos no momento.";
         promoCard.classList.remove("promo-orderable");
+        promoCard.classList.add("promo-unavailable");
         promoCard.removeAttribute("role");
         promoCard.removeAttribute("tabindex");
         promoCard.removeAttribute("aria-label");
@@ -219,6 +230,5 @@
     renderCart();
   });
 
-  // Recarrega a promoção usando os novos campos de pedido direto.
   loadPromotion();
 })();
