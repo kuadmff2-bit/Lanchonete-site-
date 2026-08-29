@@ -8,6 +8,7 @@
   <title>Lanchonete | Cardápio</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="promo-order.css">
 </head>
 <body>
   <header class="topbar">
@@ -28,12 +29,17 @@
     </section>
 
     <section class="promo-section" id="promoSection" hidden>
-      <div class="promo-card">
+      <div class="promo-card" id="promoCard">
         <img id="promoImage" class="promo-image" alt="Imagem da promoção">
         <div class="promo-content">
           <span class="promo-label">PROMOÇÃO</span>
           <h2 id="promoTitle">Promoção do dia</h2>
           <p id="promoDescription"></p>
+          <div class="promo-order-meta" id="promoOrderMeta" hidden>
+            <strong class="promo-order-price" id="promoOrderPrice"></strong>
+            <button class="promo-order-button" id="promoOrderButton" type="button">Pedir esta promoção</button>
+            <small class="promo-order-hint">Toque em qualquer parte da promoção para ir direto ao pedido.</small>
+          </div>
         </div>
       </div>
     </section>
@@ -86,6 +92,11 @@
       <button class="icon-button" id="closeCheckout" type="button" aria-label="Fechar">×</button>
     </div>
     <form id="checkoutForm">
+      <div class="selected-promo-box" id="selectedPromoBox" hidden>
+        <span>PROMOÇÃO SELECIONADA</span>
+        <strong id="selectedPromoTitle"></strong>
+        <small>Valor da promoção: <b id="selectedPromoPrice"></b></small>
+      </div>
       <label>Seu nome<input id="customerName" name="customerName" type="text" autocomplete="name" placeholder="Ex.: Carlos" required></label>
       <div class="choice-group">
         <span class="field-label">Como você quer receber?</span>
@@ -113,5 +124,6 @@
 
   <footer><strong>Lanchonete</strong><span>Cardápio digital · 24 horas</span></footer>
   <script src="script.js"></script>
+  <script src="promo-order.js"></script>
 </body>
 </html>
