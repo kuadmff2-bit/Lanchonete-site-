@@ -1,0 +1,1 @@
+Forçar novo deploy do Cloudflare após atualização de promoções clicáveis.
