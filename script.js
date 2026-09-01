@@ -14,7 +14,7 @@ const FALLBACK_PRODUCTS = [
   { id: "13", name: "Misto Simples", price: 5, description: "Simples, rápido e saboroso.", category: "lanche", available: true, image: "" }
 ];
 
-const WHATSAPP_NUMBER = "559293282918";
+const WHATSAPP_NUMBER = "5592992973832";
 let products = [...FALLBACK_PRODUCTS];
 const cart = new Map();
 const $ = (selector) => document.querySelector(selector);
