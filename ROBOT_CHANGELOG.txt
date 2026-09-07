@@ -1,0 +1,4 @@
+2026-09-07
+- adicionados admin-robot.js e admin-robot.css
+- adicionada configuração inicial do robô
+- documentação criada
