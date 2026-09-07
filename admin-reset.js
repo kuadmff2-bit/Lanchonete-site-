@@ -38,3 +38,13 @@
     }
   });
 })();
+
+// Carrega o módulo do robô sem interferir nas funções já existentes do painel.
+(() => {
+  if (document.querySelector('script[data-admin-robot]')) return;
+  const script = document.createElement('script');
+  script.src = 'admin-robot.js';
+  script.defer = true;
+  script.dataset.adminRobot = '1';
+  document.body.appendChild(script);
+})();
