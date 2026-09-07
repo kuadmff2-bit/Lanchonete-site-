@@ -1,1 +1,0 @@
-Arquivos do módulo do robô criados. A integração visual no admin.html é feita separadamente para preservar o painel existente.
