@@ -1,0 +1,1 @@
+Módulo criado em 2026-09-07. Pendência: inclusão no HTML principal do admin.
