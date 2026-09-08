@@ -9,7 +9,19 @@ A interface do robô fica integrada ao painel administrativo e é carregada pelo
 - menu automático;
 - horário de atendimento;
 - encaminhamento para atendente;
-- teste rápido das respostas.
+- teste rápido das respostas;
+- número central do WhatsApp da lanchonete.
+
+## Número central do WhatsApp
+O número comercial é salvo no KV `PROMOTIONS`, na chave `business-contact`, e é exposto pelo endpoint `/api/business-contact`.
+
+Ao alterar o número na área **Robô > WhatsApp da lanchonete**:
+- o botão de WhatsApp do cardápio passa a usar o novo número;
+- o número mostrado no site é atualizado;
+- a finalização de pedidos consulta o número atual antes de abrir o WhatsApp;
+- serviços externos do robô podem consultar o mesmo endpoint e usar a mesma configuração.
+
+A troca do número configurado não consegue autenticar automaticamente uma nova conta do WhatsApp. Se o serviço 24h estiver conectado ao número antigo, será necessário fazer uma nova conexão/QR uma vez para o novo número.
 
 ## Sincronização
 As configurações são salvas no backend pelo endpoint `/api/robot` e armazenadas no KV `PROMOTIONS`, na chave `robot-settings`. O navegador/WebView mantém uma cópia local apenas como fallback.
