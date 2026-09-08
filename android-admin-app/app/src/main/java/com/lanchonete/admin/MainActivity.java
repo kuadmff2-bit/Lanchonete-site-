@@ -6,6 +6,9 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
@@ -14,25 +17,50 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private static final String ADMIN_URL = "https://lanchonete-site.kuadmff2.workers.dev/admin?v=20260829-2";
+    private static final String ADMIN_URL = "https://lanchonete-site.kuadmff2.workers.dev/admin?v=20260908-1";
     private static final String ALLOWED_HOST = "lanchonete-site.kuadmff2.workers.dev";
-    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.2";
+    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.5";
     private static final int FILE_CHOOSER_REQUEST = 4102;
+    private static final long MIN_SPLASH_MS = 700L;
+    private static final int READY_MAX_ATTEMPTS = 180;
 
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+
+    private FrameLayout root;
     private WebView webView;
+    private SplashView splashView;
     private ValueCallback<Uri[]> filePathCallback;
+    private long splashStartedAt;
+    private boolean appRevealed = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        splashStartedAt = SystemClock.uptimeMillis();
+
+        root = new FrameLayout(this);
+        root.setBackgroundColor(Color.rgb(13, 13, 13));
+
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(13, 13, 13));
-        setContentView(webView);
+        webView.setVisibility(View.INVISIBLE);
+        root.addView(webView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        ));
 
+        splashView = new SplashView(this);
+        root.addView(splashView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+
+        setContentView(root);
         configureWebView();
 
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
@@ -57,7 +85,7 @@ public class MainActivity extends Activity {
 
         String currentUserAgent = settings.getUserAgentString();
         if (currentUserAgent == null) currentUserAgent = "";
-        if (!currentUserAgent.contains(APP_USER_AGENT)) {
+        if (!currentUserAgent.contains("LanchoneteAdminApp/")) {
             settings.setUserAgentString((currentUserAgent + " " + APP_USER_AGENT).trim());
         }
 
@@ -99,6 +127,7 @@ public class MainActivity extends Activity {
                     restoreAdminSession();
                     installLogoutHook();
                     installOrderButtonsFallback();
+                    waitForAdminReady(0);
                 }
             }
         });
@@ -140,20 +169,83 @@ public class MainActivity extends Activity {
 
         String script = "(async()=>{" +
                 "try{" +
+                "document.documentElement.dataset.apkReady='0';" +
                 "const r=await fetch('/api/orders',{cache:'no-store',credentials:'include'});" +
-                "if(!r.ok)return;" +
+                "if(!r.ok)throw new Error('orders');" +
                 "const d=await r.json();" +
                 "const login=document.querySelector('#loginPanel');" +
                 "const app=document.querySelector('#adminApp');" +
                 "if(login)login.hidden=true;" +
                 "if(app)app.hidden=false;" +
                 "if(typeof renderDashboard==='function')renderDashboard(d);" +
-                "if(typeof loadProducts==='function'&&typeof loadPromotion==='function')" +
-                "await Promise.all([loadProducts(),loadPromotion()]);" +
-                "}catch(e){}" +
+                "const tasks=[];" +
+                "if(typeof loadProducts==='function')tasks.push(Promise.resolve(loadProducts()));" +
+                "if(typeof loadPromotion==='function')tasks.push(Promise.resolve(loadPromotion()));" +
+                "if(tasks.length)await Promise.allSettled(tasks);" +
+                "document.documentElement.dataset.apkReady='1';" +
+                "}catch(e){document.documentElement.dataset.apkReady='error';}" +
                 "})();";
 
         webView.evaluateJavascript(script, null);
+    }
+
+    private void waitForAdminReady(final int attempt) {
+        if (webView == null || appRevealed) return;
+
+        String check = "(()=>{" +
+                "const app=document.querySelector('#adminApp');" +
+                "return document.documentElement.dataset.apkReady==='1' && !!app && !app.hidden;" +
+                "})()";
+
+        webView.evaluateJavascript(check, value -> {
+            if (appRevealed || webView == null) return;
+
+            if ("true".equals(value)) {
+                revealAdmin();
+                return;
+            }
+
+            if (attempt >= READY_MAX_ATTEMPTS) {
+                Toast.makeText(
+                        MainActivity.this,
+                        "O painel está demorando para carregar. Verifique sua conexão.",
+                        Toast.LENGTH_LONG
+                ).show();
+                return;
+            }
+
+            uiHandler.postDelayed(() -> waitForAdminReady(attempt + 1), 100L);
+        });
+    }
+
+    private void revealAdmin() {
+        if (appRevealed || webView == null) return;
+        appRevealed = true;
+
+        long elapsed = SystemClock.uptimeMillis() - splashStartedAt;
+        long delay = Math.max(0L, MIN_SPLASH_MS - elapsed);
+
+        uiHandler.postDelayed(() -> {
+            if (webView == null) return;
+
+            webView.setAlpha(0f);
+            webView.setVisibility(View.VISIBLE);
+            webView.animate().alpha(1f).setDuration(180L).start();
+
+            if (splashView != null) {
+                splashView.stopAnimation();
+                splashView.animate()
+                        .alpha(0f)
+                        .setDuration(220L)
+                        .withEndAction(() -> {
+                            if (root != null && splashView != null) {
+                                root.removeView(splashView);
+                            }
+                            splashView = null;
+                        })
+                        .start();
+            }
+        }, delay);
     }
 
     private void installLogoutHook() {
@@ -262,7 +354,14 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        uiHandler.removeCallbacksAndMessages(null);
         CookieManager.getInstance().flush();
+
+        if (splashView != null) {
+            splashView.stopAnimation();
+            splashView = null;
+        }
+
         if (webView != null) {
             webView.stopLoading();
             webView.setWebChromeClient(null);
@@ -270,6 +369,8 @@ public class MainActivity extends Activity {
             webView.destroy();
             webView = null;
         }
+
+        root = null;
         super.onDestroy();
     }
 }
