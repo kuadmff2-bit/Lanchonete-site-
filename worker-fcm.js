@@ -1,5 +1,6 @@
 import baseWorker from "./worker.js";
 import { handlePushRegistration, notifyNewOrder } from "./push.js";
+import { handleBusinessContact } from "./business-contact-api.js";
 
 const DEFAULT_ROBOT_SETTINGS = {
   enabled: false,
@@ -495,6 +496,10 @@ function publicFirebaseConfig(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/business-contact") {
+      return handleBusinessContact(request, env);
+    }
 
     if (url.pathname === "/api/robot") {
       return handleRobotSettings(request, env, ctx);
