@@ -22,7 +22,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy no Cloudflare
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: deploy
+          wranglerVersion: "4"
+          command: deploy --config wrangler.jsonc
