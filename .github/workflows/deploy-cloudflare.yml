@@ -21,9 +21,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Instalar Wrangler globalmente
+        run: npm install --global wrangler@4
+
       - name: Deploy no Cloudflare
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          wranglerVersion: "4"
-          command: deploy --config wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: wrangler deploy --config wrangler.jsonc
