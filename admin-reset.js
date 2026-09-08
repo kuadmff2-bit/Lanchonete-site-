@@ -39,6 +39,34 @@
   });
 })();
 
+// No APK administrativo não existe tela de login: o próprio app é reconhecido pelo backend.
+(() => {
+  const isAdminApp = (navigator.userAgent || "").includes("LanchoneteAdminApp/");
+  if (!isAdminApp) return;
+
+  const loginPanel = document.querySelector("#loginPanel");
+  const adminApp = document.querySelector("#adminApp");
+  const logoutButton = document.querySelector("#logoutButton");
+
+  if (loginPanel) loginPanel.hidden = true;
+  if (adminApp) adminApp.hidden = false;
+  if (logoutButton) logoutButton.hidden = true;
+
+  (async () => {
+    try {
+      const orders = await api("/api/orders");
+      if (typeof renderDashboard === "function") renderDashboard(orders);
+      if (typeof loadProducts === "function" && typeof loadPromotion === "function") {
+        await Promise.all([loadProducts(), loadPromotion()]);
+      }
+    } catch (error) {
+      if (typeof setStatus === "function") {
+        setStatus("#dashboardStatus", error.message || "Não foi possível abrir o painel administrativo.", "error");
+      }
+    }
+  })();
+})();
+
 // Carrega o módulo do robô sem interferir nas funções já existentes do painel.
 (() => {
   if (!document.querySelector('script[data-admin-robot]')) {
