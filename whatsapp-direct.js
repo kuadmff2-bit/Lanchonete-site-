@@ -2,6 +2,28 @@
 (() => {
   if (!checkoutForm) return;
 
+  function normalizeBusinessNumber(value) {
+    let digits = String(value || "").replace(/\D/g, "");
+    if (digits.length === 10 || digits.length === 11) digits = `55${digits}`;
+    return /^55\d{10,11}$/.test(digits) ? digits : "";
+  }
+
+  async function getBusinessWhatsAppNumber() {
+    try {
+      const response = await fetch('/api/business-contact', { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const number = normalizeBusinessNumber(data.whatsappNumber);
+        if (number) {
+          window.BUSINESS_WHATSAPP_NUMBER = number;
+          return number;
+        }
+      }
+    } catch (_) {}
+
+    return normalizeBusinessNumber(window.BUSINESS_WHATSAPP_NUMBER);
+  }
+
   function whatsappDirectUrl(number, message) {
     const encoded = encodeURIComponent(message);
     const isAndroid = /Android/i.test(navigator.userAgent || "");
@@ -37,9 +59,12 @@
     checkoutButton.textContent = "Registrando pedido...";
 
     try {
+      const whatsappNumber = await getBusinessWhatsAppNumber();
+      if (!whatsappNumber) throw new Error("O WhatsApp da lanchonete ainda não foi configurado no painel administrativo.");
+
       const registeredOrder = await registerOrder(formData);
       const message = buildWhatsAppMessage(formData, registeredOrder);
-      const whatsappUrl = whatsappDirectUrl(WHATSAPP_NUMBER, message);
+      const whatsappUrl = whatsappDirectUrl(whatsappNumber, message);
 
       checkoutButton.textContent = `Pedido ${registeredOrder.id} registrado`;
 
