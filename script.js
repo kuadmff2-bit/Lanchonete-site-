@@ -14,7 +14,12 @@ const FALLBACK_PRODUCTS = [
   { id: "13", name: "Misto Simples", price: 5, description: "Simples, rápido e saboroso.", category: "lanche", available: true, image: "" }
 ];
 
-const WHATSAPP_NUMBER = "5592992973832";
+let WHATSAPP_NUMBER = String(window.BUSINESS_WHATSAPP_NUMBER || "").replace(/\D/g, "");
+window.addEventListener("business-whatsapp-updated", (event) => {
+  const next = String(event.detail?.whatsappNumber || "").replace(/\D/g, "");
+  if (next) WHATSAPP_NUMBER = next;
+});
+
 let products = [...FALLBACK_PRODUCTS];
 const cart = new Map();
 const $ = (selector) => document.querySelector(selector);
@@ -254,6 +259,7 @@ checkoutForm.addEventListener("submit", async (event) => {
   checkoutButton.textContent = "Registrando pedido...";
 
   try {
+    if (!WHATSAPP_NUMBER) throw new Error("O WhatsApp da lanchonete ainda não foi configurado.");
     const registeredOrder = await registerOrder(formData);
     const message = buildWhatsAppMessage(formData, registeredOrder);
     const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
