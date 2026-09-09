@@ -1,0 +1,39 @@
+name: Deploy Lanchonetes 2 e 3
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-novas-lanchonetes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    strategy:
+      matrix:
+        include:
+          - repository: kuadmff2-bit/lanchonete-2
+            worker: lanchonete-2
+          - repository: kuadmff2-bit/lanchonete-3
+            worker: lanchonete-3
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-${{ matrix.worker }}-production
+      cancel-in-progress: true
+    steps:
+      - name: Checkout ${{ matrix.repository }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repository }}
+          ref: main
+
+      - name: Instalar Wrangler
+        run: npm install --global wrangler@4
+
+      - name: Deploy no Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: wrangler deploy --config wrangler.jsonc
