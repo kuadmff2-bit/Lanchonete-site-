@@ -15,8 +15,9 @@ O painel agora possui:
 - controle Disponível / Indisponível por produto;
 - foto por produto;
 - publicação e ocultação de promoções.
-- personalização de nome, textos, logo, capa, fundo e cores;
-- robô de atendimento com cardápio e criação de pedidos;
+- personalização de nome, textos, logo, capa e fundo;
+- modos claro e escuro com a paleta original e contraste fixo;
+- WhatsApp transacional para enviar pedidos e atualizações, sem atendimento automático;
 - estado da conexão e QR Code do WhatsApp dentro do APK;
 - troca do WhatsApp conectado pelo próprio painel.
 

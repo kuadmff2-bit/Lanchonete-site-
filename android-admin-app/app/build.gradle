@@ -15,8 +15,8 @@ android {
         applicationId 'com.lanchonete.admin'
         minSdk 23
         targetSdk 35
-        versionCode 8
-        versionName '1.8'
+        versionCode 9
+        versionName '1.9'
         buildConfigField "String", "ADMIN_APP_TOKEN", "\"" + escapedAdminAppToken + "\""
     }
 

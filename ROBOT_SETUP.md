@@ -1,95 +1,52 @@
-# Robô do painel administrativo
+# WhatsApp automático do cardápio
 
-A interface do robô fica integrada ao painel administrativo e é carregada pelos arquivos `admin-robot.js` e `admin-robot.css`.
+Esta integração é exclusivamente transacional. Ela não cria menus, não interpreta mensagens recebidas e não atende clientes.
 
-## Recursos no ADM
-- visualizar o estado real da conexão do WhatsApp;
-- gerar e escanear o QR Code dentro do APK administrativo;
-- desconectar a sessão atual e conectar outro número;
-- ligar/desligar o robô;
-- mensagem de saudação;
-- mensagem de fallback;
-- menu automático;
-- horário de atendimento;
-- taxa fixa de entrega, aplicada somente aos pedidos entregues;
-- encaminhamento para atendente;
-- teste rápido das respostas;
-- número central do WhatsApp da lanchonete.
+## Fluxo
 
-## Número central do WhatsApp
-O número comercial é salvo no KV `PROMOTIONS`, na chave `business-contact`, e é exposto pelo endpoint `/api/business-contact`.
+1. O cliente finaliza um pedido no cardápio.
+2. O Worker registra o pedido e chama o serviço 24 horas.
+3. O serviço envia o pedido completo ao WhatsApp configurado da lanchonete.
+4. O mesmo serviço envia a confirmação ao WhatsApp do cliente.
+5. Ao tocar em **Confirmado**, **Saiu para entrega** ou **Cancelado** no APK, o Worker envia a atualização ao cliente automaticamente.
 
-Ao alterar o número na área **Robô > WhatsApp da lanchonete**:
-- o botão de WhatsApp do cardápio passa a usar o novo número;
-- o número mostrado no site é atualizado;
-- a finalização de pedidos consulta o número atual antes de abrir o WhatsApp;
-- serviços externos do robô podem consultar o mesmo endpoint e usar a mesma configuração.
+Pedidos abertos por `/?preview=admin` são apenas simulações: não são gravados, contabilizados ou enviados.
 
-Ao trocar a conta conectada, use **Robô > Conectar outro WhatsApp**. O serviço encerra a sessão anterior, apaga somente os dados daquela sessão e gera um novo QR Code dentro do próprio APK.
+## Painel administrativo
 
-## Sincronização
-As configurações são salvas no backend pelo endpoint `/api/robot` e armazenadas no KV `PROMOTIONS`, na chave `robot-settings`. O navegador/WebView mantém uma cópia local apenas como fallback.
+Na aba **WhatsApp**, o administrador pode:
 
-O endpoint `POST /api/robot` exige a autenticação normal do administrador. O `GET /api/robot` expõe somente as regras de atendimento.
+- visualizar o estado real da conexão;
+- escanear o QR Code dentro do APK;
+- conectar outro WhatsApp;
+- alterar o número que recebe os pedidos;
+- conferir quais mensagens são automáticas.
 
-## Motor de conversa e pedidos
-O endpoint `POST /api/robot/chat` mantém uma sessão separada para cada cliente e usa os produtos reais cadastrados no cardápio.
+Não existem configurações de saudação, respostas, menu ou encaminhamento, porque mensagens recebidas ficam para a equipe responder normalmente.
 
-Fluxo principal:
-1. Cliente pede o cardápio.
-2. Robô envia o link do cardápio digital e todos os produtos disponíveis numerados, com preço.
-3. Cliente envia o número do produto.
-4. Robô pergunta quantas unidades.
-5. Na etapa de quantidade, somente números inteiros de 1 a 30 são aceitos.
-6. O item e a quantidade são acumulados no carrinho do cliente.
-7. O cliente pode escolher outros produtos ou enviar `finalizar`.
-8. Ao finalizar, o robô pede nome, entrega/retirada, endereço quando necessário e forma de pagamento.
-9. Se houver taxa de entrega configurada, ela é informada ao cliente e somada ao total no servidor.
-10. O pedido é criado pelo mesmo endpoint `/api/orders` usado pelo cardápio e aparece normalmente no painel administrativo.
+## Serviço 24 horas
 
-Comandos úteis durante o atendimento:
-- `cardápio` — mostra o link e a lista numerada atualizada;
-- `carrinho` — mostra os itens acumulados e o total;
-- `finalizar` — inicia o fechamento do pedido;
-- `cancelar` — limpa o atendimento e o carrinho;
-- `atendente` — solicita atendimento humano, quando habilitado.
+Implante a pasta `whatsapp-robot` em um serviço Node/Docker e mantenha um volume persistente em `/app/tokens`.
 
-As sessões expiram automaticamente depois de algumas horas sem atividade para evitar carrinhos abandonados permanentes.
+Variáveis por instância:
 
-## Integração com WhatsApp
-Um serviço de WhatsApp deve encaminhar cada mensagem recebida para `POST /api/robot/chat` usando um `contactId` estável e, de preferência, o telefone do cliente. A resposta JSON contém o texto em `reply`, além do estado da conversa, carrinho e indicadores como `handoff` ou `completed`.
+- `ROBOT_API_BASE`: endereço público do Worker da lanchonete;
+- `ROBOT_WEBHOOK_TOKEN`: segredo exclusivo usado na sincronização do QR;
+- `ROBOT_CONTROL_TOKEN`: segredo usado pelo Worker nas chamadas servidor-servidor;
+- `WPP_SESSION`: nome exclusivo da sessão;
+- `WPP_TOKEN_PATH`: `/app/tokens` quando houver volume persistente.
 
-Exemplo de entrada:
+Variáveis do Worker:
 
-```json
-{
-  "contactId": "5592999999999",
-  "phone": "5592999999999",
-  "message": "cardápio"
-}
-```
+- `ROBOT_SERVICE_URL`: URL HTTPS terminando em `/instances/<slug-da-instancia>`;
+- `ROBOT_CONTROL_TOKEN` ou `ADMIN_PASSWORD`: deve coincidir com o controle da instância;
+- `ROBOT_WEBHOOK_TOKEN` ou `ROBOT_WEBHOOK_TOKEN_SHA256`: usado quando a sincronização direta com o Worker estiver habilitada.
 
-Quando a variável secreta `ROBOT_WEBHOOK_TOKEN` estiver configurada no Cloudflare, o serviço externo também deve enviar o mesmo valor no cabeçalho `x-robot-token`.
+## Endpoints protegidos
 
-## Serviço 24 horas e QR no APK
+- `GET /control/status` — estado e QR Code;
+- `POST /control/reset` — conectar outra conta;
+- `POST /control/send-order` — enviar o pedido à lanchonete e a confirmação ao cliente;
+- `POST /control/send-status` — enviar uma atualização de status ao cliente.
 
-Implante a pasta `whatsapp-robot` como um serviço Node/Docker separado. No Railway, monte um volume persistente em `/app/tokens` para a conexão continuar válida após reinicializações.
-
-Variáveis do serviço do WhatsApp:
-
-- `ROBOT_API_BASE`: endereço público do Worker desta lanchonete;
-- `ROBOT_WEBHOOK_TOKEN`: segredo forte e exclusivo usado para encaminhar mensagens ao Worker;
-- `ROBOT_CONTROL_TOKEN`: senha forte usada pelo Worker para consultar o QR e solicitar reinícios;
-- `WPP_SESSION`: nome exclusivo da sessão desta lanchonete;
-- `WPP_TOKEN_PATH`: `/app/tokens` quando o volume persistente estiver montado.
-
-Variáveis do Worker/Cloudflare:
-
-- `ROBOT_WEBHOOK_TOKEN`: o mesmo segredo do serviço, configurado como secret; ou
-- `ROBOT_WEBHOOK_TOKEN_SHA256`: o SHA-256 do segredo, que pode ficar nas variáveis do Worker sem revelar o valor original;
-- `ROBOT_SERVICE_URL`: endereço HTTPS do serviço, incluindo `/instances/<WPP_SESSION>`;
-- `ADMIN_PASSWORD` ou `ADMIN_PASSWORD_SHA256`: autenticação do painel.
-
-No modo supervisionado, o QR fica somente na memória do serviço e o Worker o consulta diretamente depois de validar a senha administrativa. Isso evita gravações contínuas no KV. Configure `ROBOT_CONTROL_TOKEN` com o mesmo valor da senha administrativa forte usada pelo painel; o Worker reutiliza essa credencial apenas na chamada servidor-servidor. O navegador e o APK nunca recebem `ROBOT_WEBHOOK_TOKEN`. Cada lanchonete deve usar uma sessão e segredos próprios para não misturar contas ou pedidos.
-
-O Durable Object SQLite `APP_STORAGE` é o armazenamento principal para sessões, pedidos e configurações mutáveis. Na primeira leitura, valores permanentes antigos do KV `PROMOTIONS` são migrados automaticamente, preservando cardápio, promoção, contato e histórico existentes. Sessões e caches temporários recomeçam limpos por segurança.
+Os endpoints de controle exigem `Authorization: Bearer <ROBOT_CONTROL_TOKEN>`. O navegador nunca recebe esse segredo.

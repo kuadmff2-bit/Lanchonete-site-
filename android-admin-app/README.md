@@ -11,8 +11,10 @@ Aplicativo Android que abre diretamente o painel administrativo da lanchonete:
 - upload/troca de imagens pelo seletor do Android;
 - links externos abrem no aplicativo correspondente;
 - botão voltar do Android navega no painel;
-- visual escuro e ícone próprio.
+- modos claro e escuro;
+- ícone e tela de carregamento com o hambúrguer laranja da marca;
+- notificações de novos pedidos com som e vibração.
 
 O APK é salvo em `apk/Lanchonete-Admin.apk`. Para reconstruí-lo, passe a chave exclusiva
-como propriedade Gradle `adminAppToken`; no GitHub Actions ela vem do secret
-`ADMIN_APP_TOKEN` e também é cadastrada como segredo separado no Worker.
+como propriedade Gradle `adminAppToken`; no GitHub Actions ela é derivada de um
+segredo do projeto e cadastrada automaticamente no Worker durante a compilação.
