@@ -8,11 +8,14 @@
     openTime: '18:00',
     closeTime: '23:59',
     menuText: '1 - Ver cardápio\n2 - Fazer pedido\n3 - Acompanhar pedido\n4 - Falar com atendente',
+    deliveryFee: 0,
     updatedAt: null
   };
 
   const STORAGE_KEY = 'lanchonete_robot_settings_v1';
   let currentSettings = { ...DEFAULTS };
+  let connectionPollTimer = null;
+  let connectionRequestRunning = false;
 
   function loadLocalSettings() {
     try {
@@ -156,6 +159,7 @@
     host.querySelector('#robotBusinessHoursOnly').checked = Boolean(settings.businessHoursOnly);
     host.querySelector('#robotOpenTime').value = settings.openTime || '18:00';
     host.querySelector('#robotCloseTime').value = settings.closeTime || '23:59';
+    host.querySelector('#robotDeliveryFee').value = Number(settings.deliveryFee || 0).toFixed(2);
     refreshStatus(host);
   }
 
@@ -166,6 +170,101 @@
     status.textContent = on ? '● Robô ligado' : '● Robô desligado';
   }
 
+  async function connectionApi(options = {}) {
+    if (typeof api === 'function') return api('/api/robot/connection', options);
+
+    const headers = { ...(options.headers || {}) };
+    if (typeof adminPassword !== 'undefined' && adminPassword) headers['x-admin-password'] = adminPassword;
+    const response = await fetch('/api/robot/connection', {
+      ...options,
+      headers,
+      cache: 'no-store',
+      credentials: 'include'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Não foi possível consultar a conexão do WhatsApp.');
+    return data;
+  }
+
+  function renderConnection(host, data = {}) {
+    if (!host) return;
+    const badge = host.querySelector('#robotConnectionBadge');
+    const message = host.querySelector('#robotConnectionMessage');
+    const qrBox = host.querySelector('#robotQrBox');
+    const qrImage = host.querySelector('#robotQrImage');
+    const resetButton = host.querySelector('#robotConnectionReset');
+
+    badge.className = 'robot-connection-badge';
+    qrBox.hidden = true;
+    qrImage.removeAttribute('src');
+    resetButton.disabled = !data.configured;
+
+    if (!data.configured) {
+      badge.classList.add('is-neutral');
+      badge.textContent = 'Serviço não vinculado';
+      message.textContent = data.message || 'O serviço 24 horas ainda precisa ser vinculado a este sistema.';
+      return;
+    }
+
+    if (data.connected) {
+      badge.classList.add('is-connected');
+      badge.textContent = 'WhatsApp conectado';
+      message.textContent = 'A conexão está ativa e o robô pode receber mensagens.';
+      return;
+    }
+
+    if (data.qrReady && data.qrImage) {
+      badge.classList.add('is-waiting');
+      badge.textContent = 'Aguardando leitura';
+      message.textContent = 'Abra o WhatsApp no celular que será usado pela lanchonete e leia o código abaixo.';
+      qrImage.src = data.qrImage;
+      qrBox.hidden = false;
+      return;
+    }
+
+    if (data.authState === 'unreachable' || data.authState === 'error') {
+      badge.classList.add('is-error');
+      badge.textContent = 'Conexão indisponível';
+      message.textContent = data.error || data.lastError || 'Não foi possível acessar o serviço do WhatsApp agora.';
+      return;
+    }
+
+    badge.classList.add('is-preparing');
+    badge.textContent = 'Preparando QR Code';
+    message.textContent = 'Aguarde alguns segundos. Esta tela será atualizada automaticamente.';
+  }
+
+  async function loadConnection(host, { quiet = false } = {}) {
+    if (!host || connectionRequestRunning) return;
+    connectionRequestRunning = true;
+    const refreshButton = host.querySelector('#robotConnectionRefresh');
+    if (!quiet) refreshButton.disabled = true;
+
+    try {
+      renderConnection(host, await connectionApi());
+    } catch (error) {
+      renderConnection(host, {
+        configured: true,
+        connected: false,
+        authState: 'unreachable',
+        error: error.message
+      });
+    } finally {
+      connectionRequestRunning = false;
+      refreshButton.disabled = false;
+    }
+  }
+
+  function startConnectionPolling(host) {
+    if (connectionPollTimer) clearInterval(connectionPollTimer);
+    connectionPollTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      const panel = document.querySelector('#tab-robot');
+      if (panel && !panel.classList.contains('active')) return;
+      loadConnection(host, { quiet: true });
+    }, 5000);
+  }
+
   function renderRobotPanel() {
     ensureStyle();
     const host = ensureShell();
@@ -173,10 +272,37 @@
     host.dataset.robotReady = '1';
 
     host.innerHTML = `
-      <div class="robot-admin-card">
+      <section class="robot-admin-card robot-connection-card">
         <div class="robot-admin-header">
           <div>
-            <h2>🤖 Robô de Atendimento</h2>
+            <h2>Conexão do WhatsApp</h2>
+            <p>O QR Code aparece aqui e a conexão fica salva para o atendimento funcionar 24 horas.</p>
+          </div>
+          <span class="robot-connection-badge is-preparing" id="robotConnectionBadge">Verificando</span>
+        </div>
+
+        <p class="robot-connection-message" id="robotConnectionMessage">Consultando o serviço do WhatsApp...</p>
+
+        <div class="robot-qr-box" id="robotQrBox" hidden>
+          <img id="robotQrImage" alt="QR Code para conectar o WhatsApp">
+          <ol>
+            <li>Abra o WhatsApp no celular da lanchonete.</li>
+            <li>Entre em <strong>Aparelhos conectados</strong>.</li>
+            <li>Toque em <strong>Conectar um aparelho</strong> e leia este código.</li>
+          </ol>
+        </div>
+
+        <div class="robot-actions">
+          <button type="button" class="admin-secondary" id="robotConnectionRefresh">Atualizar estado</button>
+          <button type="button" class="admin-primary" id="robotConnectionReset">Conectar outro WhatsApp</button>
+        </div>
+        <p class="status" id="robotConnectionActionStatus" aria-live="polite"></p>
+      </section>
+
+      <section class="robot-admin-card">
+        <div class="robot-admin-header">
+          <div>
+            <h2>Robô de atendimento</h2>
             <p>Configure as respostas automáticas e deixe tudo pronto para o canal de WhatsApp conectado ao sistema.</p>
           </div>
           <label class="robot-switch"><input id="robotEnabled" type="checkbox"><span></span></label>
@@ -198,6 +324,7 @@
         <div class="robot-hours">
           <label>Abertura<input id="robotOpenTime" type="time"></label>
           <label>Fechamento<input id="robotCloseTime" type="time"></label>
+          <label>Taxa de entrega (R$)<input id="robotDeliveryFee" type="number" min="0" max="1000" step="0.01" inputmode="decimal"></label>
         </div>
 
         <div class="robot-actions">
@@ -212,8 +339,8 @@
           <div class="robot-test-reply" id="robotTestReply"></div>
         </div>
 
-        <div class="robot-note"><strong>Integração preparada:</strong> as configurações ficam sincronizadas no backend do cardápio. O WhatsApp ainda precisa de um serviço 24h conectado para receber e enviar as mensagens reais.</div>
-      </div>`;
+        <div class="robot-note"><strong>Sincronização:</strong> o robô usa os produtos, preços e disponibilidade publicados neste cardápio.</div>
+      </section>`;
 
     const collect = () => ({
       enabled: host.querySelector('#robotEnabled').checked,
@@ -223,7 +350,8 @@
       businessHoursOnly: host.querySelector('#robotBusinessHoursOnly').checked,
       openTime: host.querySelector('#robotOpenTime').value || '18:00',
       closeTime: host.querySelector('#robotCloseTime').value || '23:59',
-      menuText: host.querySelector('#robotMenuText').value.trim() || DEFAULTS.menuText
+      menuText: host.querySelector('#robotMenuText').value.trim() || DEFAULTS.menuText,
+      deliveryFee: Math.max(0, Math.min(1000, Number(host.querySelector('#robotDeliveryFee').value.replace(',', '.')) || 0))
     });
 
     host.querySelector('#robotEnabled').addEventListener('change', () => refreshStatus(host));
@@ -258,7 +386,38 @@
     host.querySelector('#robotTestSend').addEventListener('click', sendTest);
     host.querySelector('#robotTestInput').addEventListener('keydown', (event) => { if (event.key === 'Enter') sendTest(); });
 
+    host.querySelector('#robotConnectionRefresh').addEventListener('click', () => loadConnection(host));
+    host.querySelector('#robotConnectionReset').addEventListener('click', async () => {
+      const confirmed = confirm('Isso desconectará o WhatsApp atual e gerará um novo QR Code. Continuar?');
+      if (!confirmed) return;
+
+      const button = host.querySelector('#robotConnectionReset');
+      const status = host.querySelector('#robotConnectionActionStatus');
+      button.disabled = true;
+      status.className = 'status';
+      status.textContent = 'Preparando uma nova conexão...';
+
+      try {
+        const result = await connectionApi({
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'reset' })
+        });
+        status.className = 'status ok';
+        status.textContent = result.message || 'Novo QR Code solicitado.';
+        renderConnection(host, { configured: true, authState: 'starting' });
+        setTimeout(() => loadConnection(host), 1200);
+      } catch (error) {
+        status.className = 'status error';
+        status.textContent = error.message || 'Não foi possível gerar um novo QR Code.';
+      } finally {
+        button.disabled = false;
+      }
+    });
+
     updateForm(host, currentSettings);
+    loadConnection(host);
+    startConnectionPolling(host);
     return host;
   }
 

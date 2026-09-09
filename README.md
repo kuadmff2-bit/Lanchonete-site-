@@ -15,6 +15,9 @@ O painel agora possui:
 - controle Disponível / Indisponível por produto;
 - foto por produto;
 - publicação e ocultação de promoções.
+- robô de atendimento com cardápio e criação de pedidos;
+- estado da conexão e QR Code do WhatsApp dentro do APK;
+- troca do WhatsApp conectado pelo próprio painel.
 
 ## Cloudflare Pages
 O backend usa o mesmo Workers KV para promoções, produtos e estatísticas.
@@ -30,3 +33,5 @@ Os pedidos contabilizados no painel representam clientes que tocaram em **Enviar
 ## WhatsApp
 Número configurado: (92) 99515-9975.
 A mensagem não usa emojis para evitar caracteres quebrados em alguns aparelhos.
+
+O serviço 24 horas e o QR Code integrado ao APK são configurados conforme `ROBOT_SETUP.md`.

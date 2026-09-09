@@ -267,6 +267,11 @@ async function createOrder(request, env) {
   const customerName = safeText(body?.customerName, 80);
   const customerPhone = normalizeCustomerPhone(body?.customerPhone);
   const deliveryType = body?.deliveryType === "Retirada" ? "Retirada" : "Entrega";
+  const trustedRobotOrder = Boolean(env.ROBOT_WEBHOOK_TOKEN)
+    && request.headers.get("x-robot-token") === env.ROBOT_WEBHOOK_TOKEN;
+  const deliveryFee = deliveryType === "Entrega" && trustedRobotOrder
+    ? Math.min(safePrice(body?.deliveryFee), 1000)
+    : 0;
   const payment = ["Pix", "Cartão", "Dinheiro"].includes(body?.payment) ? body.payment : "";
   const localDate = safeDate(body?.localDate);
   const clientOrderId = safeText(body?.clientOrderId, 80).replace(/[^a-zA-Z0-9_-]/g, "");
@@ -330,7 +335,18 @@ async function createOrder(request, env) {
     });
   }
 
-  const itemCount = normalizedItems.reduce((sum, item) => sum + item.qty, 0);
+  if (deliveryFee > 0) {
+    normalizedItems.push({
+      id: "delivery-fee",
+      name: "Taxa de entrega",
+      qty: 1,
+      unitPrice: deliveryFee,
+      subtotal: deliveryFee,
+      type: "delivery_fee"
+    });
+  }
+
+  const itemCount = normalizedItems.reduce((sum, item) => sum + (item.type === "delivery_fee" ? 0 : item.qty), 0);
   const total = Number(normalizedItems.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2));
   if (itemCount <= 0 || total < 0 || total > 10000) return json({ error: "O valor do pedido é inválido." }, 400);
 
@@ -345,6 +361,7 @@ async function createOrder(request, env) {
     customerName,
     customerPhone,
     deliveryType,
+    deliveryFee,
     address: deliveryType === "Entrega" ? safeText(body?.address, 160) : "",
     reference: deliveryType === "Entrega" ? safeText(body?.reference, 120) : "",
     payment,

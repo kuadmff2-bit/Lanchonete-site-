@@ -10,6 +10,7 @@ const ROBOT_WEBHOOK_TOKEN = String(process.env.ROBOT_WEBHOOK_TOKEN || '');
 const SESSION_NAME = String(process.env.WPP_SESSION || 'lanchonete-whatsapp');
 const TOKEN_DIR = String(process.env.WPP_TOKEN_PATH || path.join(process.cwd(), 'tokens'));
 const QR_ACCESS_TOKEN = String(process.env.QR_ACCESS_TOKEN || crypto.randomBytes(20).toString('hex'));
+const ROBOT_CONTROL_TOKEN = String(process.env.ROBOT_CONTROL_TOKEN || QR_ACCESS_TOKEN);
 const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/chromium';
 
 let clientRef = null;
@@ -19,6 +20,7 @@ let authState = 'starting';
 let lastError = '';
 let reconnectTimer = null;
 let starting = false;
+let connectedAt = null;
 
 fs.mkdirSync(TOKEN_DIR, { recursive: true });
 
@@ -96,16 +98,89 @@ async function handleMessage(msg) {
   }
 }
 
-function statusPayload() {
+function statusPayload(includeQr = false) {
   return {
     ok: true,
     connected,
     authState,
     qrReady: Boolean(qrImage),
-    apiBase: ROBOT_API_BASE,
-    session: SESSION_NAME,
+    qrImage: includeQr && !connected ? qrImage : undefined,
+    connectedAt,
     lastError: lastError || null,
   };
+}
+
+function sendJson(res, data, status = 200) {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(data));
+}
+
+function controlAuthorized(req) {
+  const authorization = String(req.headers.authorization || '');
+  const bearer = authorization.toLowerCase().startsWith('bearer ')
+    ? authorization.slice(7).trim()
+    : '';
+  const supplied = bearer || String(req.headers['x-robot-control-token'] || '');
+  if (!supplied || !ROBOT_CONTROL_TOKEN) return false;
+
+  const expectedBuffer = Buffer.from(ROBOT_CONTROL_TOKEN);
+  const suppliedBuffer = Buffer.from(supplied);
+  return expectedBuffer.length === suppliedBuffer.length
+    && crypto.timingSafeEqual(expectedBuffer, suppliedBuffer);
+}
+
+function assertSafeTokenDirectory() {
+  const resolved = path.resolve(TOKEN_DIR);
+  const root = path.parse(resolved).root;
+  if (resolved === root || resolved === '/app' || resolved.length < root.length + 4) {
+    throw new Error('WPP_TOKEN_PATH aponta para um diretório inseguro.');
+  }
+  return resolved;
+}
+
+function clearStoredSession() {
+  const resolved = assertSafeTokenDirectory();
+  fs.mkdirSync(resolved, { recursive: true });
+  for (const entry of fs.readdirSync(resolved)) {
+    fs.rmSync(path.join(resolved, entry), { recursive: true, force: true });
+  }
+}
+
+async function stopWhatsApp({ logout = false, clearSession = false } = {}) {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  const client = clientRef;
+  clientRef = null;
+  connected = false;
+  connectedAt = null;
+  qrImage = null;
+  authState = clearSession ? 'resetting' : 'restarting';
+
+  if (client) {
+    if (logout && typeof client.logout === 'function') {
+      try { await client.logout(); } catch (_) {}
+    }
+    if (typeof client.close === 'function') {
+      try { await client.close(); } catch (_) {}
+    }
+  }
+
+  if (clearSession) clearStoredSession();
+}
+
+async function restartWhatsApp({ clearSession = false } = {}) {
+  try {
+    await stopWhatsApp({ logout: clearSession, clearSession });
+    await startWhatsApp();
+  } catch (error) {
+    lastError = String(error?.message || error);
+    connected = false;
+    authState = 'error';
+    scheduleReconnect();
+  }
 }
 
 function qrPage() {
@@ -121,14 +196,47 @@ function qrPage() {
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="5"><title>Conectar WhatsApp</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0d0d0d;color:#fff;font-family:Arial,sans-serif;padding:20px}main{width:min(100%,460px);background:#181818;border:1px solid #333;border-radius:20px;padding:26px;text-align:center}.title,.ok{font-size:22px;font-weight:800;margin-bottom:18px}.ok{color:#25d366}img{display:block;width:min(100%,340px);height:auto;margin:0 auto 18px;background:#fff;padding:12px;border-radius:14px}p{color:#ccc;line-height:1.5}small{color:#888}</style></head><body><main>${content}</main></body></html>`;
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
 
-  if (url.pathname === '/health' || url.pathname === '/status') {
-    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(statusPayload()));
+  if (url.pathname === '/health') {
+    sendJson(res, statusPayload(false));
+    return;
+  }
+
+  if (url.pathname === '/control/status') {
+    if (!controlAuthorized(req)) {
+      sendJson(res, { error: 'Não autorizado.' }, 401);
+      return;
+    }
+    if (req.method !== 'GET') {
+      sendJson(res, { error: 'Método não permitido.' }, 405);
+      return;
+    }
+    sendJson(res, statusPayload(true));
+    return;
+  }
+
+  if (url.pathname === '/control/restart' || url.pathname === '/control/reset') {
+    if (!controlAuthorized(req)) {
+      sendJson(res, { error: 'Não autorizado.' }, 401);
+      return;
+    }
+    if (req.method !== 'POST') {
+      sendJson(res, { error: 'Método não permitido.' }, 405);
+      return;
+    }
+
+    const clearSession = url.pathname.endsWith('/reset');
+    restartWhatsApp({ clearSession });
+    sendJson(res, {
+      ok: true,
+      accepted: true,
+      action: clearSession ? 'reset' : 'restart',
+      message: clearSession ? 'Sessão removida. Um novo QR Code será gerado.' : 'Reconexão iniciada.'
+    }, 202);
     return;
   }
 
@@ -200,6 +308,7 @@ async function startWhatsApp() {
           ? base64Qrimg
           : `data:image/png;base64,${base64Qrimg}`;
         connected = false;
+        connectedAt = null;
         authState = 'qr';
         console.log(`📲 QR atualizado. Tentativa ${attempts}.`);
       },
@@ -229,6 +338,7 @@ async function startWhatsApp() {
 
     clientRef = client;
     connected = true;
+    connectedAt = new Date().toISOString();
     qrImage = null;
     authState = 'inChat';
     console.log('✅ WhatsApp conectado. Robô ativo.');
@@ -240,11 +350,13 @@ async function startWhatsApp() {
       console.log(`🔄 Estado do WhatsApp: ${value}`);
       if (/UNPAIRED|CONFLICT|UNLAUNCHED|DISCONNECTED|NOT_LOGGED/i.test(value)) {
         connected = false;
+        connectedAt = null;
       }
     });
   } catch (error) {
     lastError = String(error?.message || error);
     connected = false;
+    connectedAt = null;
     authState = 'error';
     console.error('❌ Erro ao iniciar WhatsApp:', lastError);
     scheduleReconnect();

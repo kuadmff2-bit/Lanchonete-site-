@@ -11,6 +11,7 @@ const DEFAULT_ROBOT_SETTINGS = {
   openTime: "18:00",
   closeTime: "23:59",
   menuText: "cardápio - Ver produtos e preços\ncarrinho - Ver seu pedido\nfinalizar - Finalizar o pedido\natendente - Falar com atendente",
+  deliveryFee: 0,
   updatedAt: null
 };
 
@@ -47,6 +48,12 @@ function plain(value) {
 
 function money(value) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function safeDeliveryFee(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return 0;
+  return Number(Math.max(0, Math.min(amount, 1000)).toFixed(2));
 }
 
 function currentManausTime() {
@@ -156,10 +163,17 @@ function cartTotal(cart) {
   return cart.reduce((sum, item) => sum + Number(item.unitPrice || 0) * Number(item.qty || 0), 0);
 }
 
-function formatCart(cart) {
+function formatCart(cart, deliveryFee = 0) {
   if (!cart.length) return "Seu pedido ainda está vazio.";
   const lines = cart.map((item) => `${item.qty}x ${item.name} — ${money(Number(item.unitPrice) * Number(item.qty))}`);
-  return `${lines.join("\n")}\n\n*Total: ${money(cartTotal(cart))}*`;
+  const fee = safeDeliveryFee(deliveryFee);
+  if (fee > 0) lines.push(`Taxa de entrega — ${money(fee)}`);
+  return `${lines.join("\n")}\n\n*Total: ${money(cartTotal(cart) + fee)}*`;
+}
+
+function deliveryChoices(settings) {
+  const fee = safeDeliveryFee(settings?.deliveryFee);
+  return `Como você quer receber?\n\n*1* - Entrega${fee > 0 ? ` (+ ${money(fee)})` : ""}\n*2* - Retirada`;
 }
 
 function findProductFromMessage(text, products) {
@@ -200,6 +214,118 @@ async function authorizeWithBaseWorker(request, env, ctx) {
   return baseWorker.fetch(authRequest, env, ctx);
 }
 
+function robotServiceConfig(env) {
+  const rawUrl = String(env.ROBOT_SERVICE_URL || "").trim().replace(/\/$/, "");
+  const token = String(env.ROBOT_CONTROL_TOKEN || "").trim();
+  if (!rawUrl || !token) return { configured: false, url: "", token: "" };
+
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "https:") return { configured: false, url: "", token: "" };
+    return { configured: true, url: parsed.toString().replace(/\/$/, ""), token };
+  } catch {
+    return { configured: false, url: "", token: "" };
+  }
+}
+
+function adminAuthHeaders(authResponse) {
+  const setCookie = authResponse.headers.get("set-cookie");
+  return setCookie ? { "set-cookie": setCookie } : {};
+}
+
+async function handleRobotConnection(request, env, ctx) {
+  const authResponse = await authorizeWithBaseWorker(request, env, ctx);
+  if (!authResponse.ok) return authResponse;
+
+  const responseHeaders = adminAuthHeaders(authResponse);
+  const service = robotServiceConfig(env);
+  if (!service.configured) {
+    return json({
+      configured: false,
+      connected: false,
+      qrReady: false,
+      authState: "not_configured",
+      message: "O serviço 24 horas do robô ainda não foi vinculado a este sistema."
+    }, 200, responseHeaders);
+  }
+
+  let remotePath = "/control/status";
+  let remoteMethod = "GET";
+  let action = "status";
+
+  if (request.method === "POST") {
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: "Dados inválidos." }, 400, responseHeaders);
+    }
+
+    action = body?.action === "reset" ? "reset" : body?.action === "restart" ? "restart" : "";
+    if (!action) return json({ error: "Ação inválida." }, 400, responseHeaders);
+    remotePath = action === "reset" ? "/control/reset" : "/control/restart";
+    remoteMethod = "POST";
+  } else if (request.method !== "GET") {
+    return json({ error: "Método não permitido." }, 405, responseHeaders);
+  }
+
+  try {
+    const remoteResponse = await fetch(`${service.url}${remotePath}`, {
+      method: remoteMethod,
+      headers: {
+        authorization: `Bearer ${service.token}`,
+        accept: "application/json"
+      }
+    });
+    const data = await remoteResponse.json().catch(() => ({}));
+    if (!remoteResponse.ok) {
+      return json({
+        configured: true,
+        connected: false,
+        qrReady: false,
+        authState: "unreachable",
+        error: safeText(data?.error, 300) || "O serviço do WhatsApp recusou a solicitação."
+      }, 502, responseHeaders);
+    }
+
+    if (request.method === "POST") {
+      return json({
+        configured: true,
+        ok: true,
+        accepted: true,
+        action,
+        message: action === "reset"
+          ? "Conexão anterior removida. Preparando um novo QR Code."
+          : "Reconexão do robô iniciada."
+      }, 202, responseHeaders);
+    }
+
+    const qrImage = typeof data?.qrImage === "string"
+      && data.qrImage.startsWith("data:image/")
+      && data.qrImage.length <= 600000
+      ? data.qrImage
+      : "";
+
+    return json({
+      configured: true,
+      connected: Boolean(data?.connected),
+      qrReady: Boolean(qrImage),
+      qrImage,
+      authState: safeText(data?.authState, 80) || "unknown",
+      connectedAt: safeText(data?.connectedAt, 80) || null,
+      lastError: safeText(data?.lastError, 400) || null
+    }, 200, responseHeaders);
+  } catch {
+    return json({
+      configured: true,
+      connected: false,
+      qrReady: false,
+      authState: "unreachable",
+      error: "Não foi possível falar com o serviço 24 horas do WhatsApp."
+    }, 502, responseHeaders);
+  }
+}
+
 async function handleRobotSettings(request, env, ctx) {
   if (request.method === "GET") {
     const settings = await loadRobotSettings(env);
@@ -228,6 +354,7 @@ async function handleRobotSettings(request, env, ctx) {
     openTime: safeTime(data.openTime, DEFAULT_ROBOT_SETTINGS.openTime),
     closeTime: safeTime(data.closeTime, DEFAULT_ROBOT_SETTINGS.closeTime),
     menuText: safeText(data.menuText, 1200) || DEFAULT_ROBOT_SETTINGS.menuText,
+    deliveryFee: safeDeliveryFee(data.deliveryFee),
     updatedAt: new Date().toISOString()
   };
 
@@ -236,7 +363,7 @@ async function handleRobotSettings(request, env, ctx) {
   return json({ ok: true, settings, storageConfigured: true }, 200, setCookie ? { "set-cookie": setCookie } : {});
 }
 
-async function createRobotOrder(request, env, ctx, session, phone, key) {
+async function createRobotOrder(request, env, ctx, session, phone, key, deliveryFee) {
   const clientOrderId = `robot-${phone}-${session.checkoutStartedAt || Date.now()}`;
   const payload = {
     clientOrderId,
@@ -248,6 +375,7 @@ async function createRobotOrder(request, env, ctx, session, phone, key) {
     payment: session.payment,
     changeFor: "",
     note: "Pedido realizado pelo robô de atendimento.",
+    deliveryFee,
     localDate: currentManausDate(),
     items: session.cart.map((item) => ({ id: item.id, qty: item.qty }))
   };
@@ -255,7 +383,10 @@ async function createRobotOrder(request, env, ctx, session, phone, key) {
   const orderUrl = new URL("/api/orders", request.url);
   const orderRequest = new Request(orderUrl, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(env.ROBOT_WEBHOOK_TOKEN ? { "x-robot-token": env.ROBOT_WEBHOOK_TOKEN } : {})
+    },
     body: JSON.stringify(payload)
   });
   const response = await baseWorker.fetch(orderRequest, env, ctx);
@@ -393,7 +524,7 @@ async function handleRobotConversation(request, env, ctx) {
       return respond("Qual é o número de WhatsApp com DDD?\nExemplo: *92999999999*");
     }
     session.stage = "checkout_delivery";
-    return respond("Como você quer receber?\n\n*1* - Entrega\n*2* - Retirada");
+    return respond(deliveryChoices(settings));
   }
 
   if (session.stage === "checkout_phone") {
@@ -401,14 +532,15 @@ async function handleRobotConversation(request, env, ctx) {
     if (!typedPhone) return respond("Envie um número de telefone válido com DDD.\nExemplo: *92999999999*");
     session.phone = typedPhone;
     session.stage = "checkout_delivery";
-    return respond("Como você quer receber?\n\n*1* - Entrega\n*2* - Retirada");
+    return respond(deliveryChoices(settings));
   }
 
   if (session.stage === "checkout_delivery") {
     if (text === "1" || text === "entrega") {
       session.deliveryType = "Entrega";
       session.stage = "checkout_address";
-      return respond("Qual é o *endereço completo* para entrega?");
+      const fee = safeDeliveryFee(settings.deliveryFee);
+      return respond(`Qual é o *endereço completo* para entrega?${fee > 0 ? `\n\nTaxa de entrega: *${money(fee)}*` : ""}`);
     }
     if (text === "2" || text === "retirada") {
       session.deliveryType = "Retirada";
@@ -416,7 +548,7 @@ async function handleRobotConversation(request, env, ctx) {
       session.stage = "checkout_payment";
       return respond("Forma de pagamento:\n\n*1* - Pix\n*2* - Cartão\n*3* - Dinheiro");
     }
-    return respond("Escolha apenas uma opção:\n*1* - Entrega\n*2* - Retirada");
+    return respond(`Escolha apenas uma opção:\n*1* - Entrega${safeDeliveryFee(settings.deliveryFee) > 0 ? ` (+ ${money(settings.deliveryFee)})` : ""}\n*2* - Retirada`);
   }
 
   if (session.stage === "checkout_address") {
@@ -438,14 +570,15 @@ async function handleRobotConversation(request, env, ctx) {
       return respond("Antes de registrar o pedido, envie seu número de WhatsApp com DDD.");
     }
 
-    const result = await createRobotOrder(request, env, ctx, session, finalPhone, key);
+    const deliveryFee = session.deliveryType === "Entrega" ? safeDeliveryFee(settings.deliveryFee) : 0;
+    const result = await createRobotOrder(request, env, ctx, session, finalPhone, key, deliveryFee);
     if (!result.ok) {
       return respond(`Não consegui registrar o pedido: ${result.error}\nDigite *finalizar* para tentar novamente ou *atendente* para pedir ajuda.`, { error: true });
     }
 
     const order = result.order || {};
     return json({
-      reply: `✅ *Pedido confirmado!*\n\nNúmero: *${order.id || "registrado"}*\n${formatCart(session.cart)}\n\nPagamento: *${session.payment}*\n${session.deliveryType === "Entrega" ? `Entrega: *${session.address}*` : "Retirada no local."}\n\nObrigado pelo pedido! 🍔`,
+      reply: `✅ *Pedido confirmado!*\n\nNúmero: *${order.id || "registrado"}*\n${formatCart(session.cart, deliveryFee)}\n\nPagamento: *${session.payment}*\n${session.deliveryType === "Entrega" ? `Entrega: *${session.address}*` : "Retirada no local."}\n\nObrigado pelo pedido! 🍔`,
       state: "completed",
       cart: [],
       order,
@@ -507,6 +640,10 @@ export default {
 
     if (url.pathname === "/api/robot/chat") {
       return handleRobotConversation(request, env, ctx);
+    }
+
+    if (url.pathname === "/api/robot/connection") {
+      return handleRobotConnection(request, env, ctx);
     }
 
     if (url.pathname === "/api/push/config" && request.method === "GET") {

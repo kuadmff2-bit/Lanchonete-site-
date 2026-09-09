@@ -17,8 +17,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install --omit=dev \
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev \
     && npm cache clean --force
 
 COPY index.js ./
