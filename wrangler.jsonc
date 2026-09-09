@@ -8,6 +8,7 @@
     "required": ["ADMIN_PASSWORD"]
   },
   "vars": {
+    "ADMIN_PASSWORD_SHA256": "c87d431851bb55cddb601e9bd8bd7eadd7bc0f4906e41318e17d63379a23b483",
     "ROBOT_WEBHOOK_TOKEN_SHA256": "af7b8a170b3bdd6a0cc655d9133e4d648c3ae8d636063ec4c11aa0cdc200026a",
     "FCM_PROJECT_ID": "lanchonete-admin",
     "FCM_ANDROID_API_KEY": "AIzaSyBxBWHnh0y5sExe81CIoQ6cV6czDFIHDGs",
