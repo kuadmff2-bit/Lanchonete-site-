@@ -77,7 +77,7 @@ jobs:
       - name: Conferir chave compilada
         shell: bash
         run: |
-          unzip -p android-admin-app/app/build/outputs/apk/debug/app-debug.apk classes.dex > "$RUNNER_TEMP/admin-classes.dex"
+          unzip -p android-admin-app/app/build/outputs/apk/debug/app-debug.apk 'classes*.dex' > "$RUNNER_TEMP/admin-classes.dex"
           if ! grep -aFq "$APP_TOKEN" "$RUNNER_TEMP/admin-classes.dex"; then
             echo "::error::A chave automática não foi encontrada no APK."
             exit 1
