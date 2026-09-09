@@ -15,12 +15,18 @@ O painel agora possui:
 - controle Disponível / Indisponível por produto;
 - foto por produto;
 - publicação e ocultação de promoções.
+- personalização de nome, textos, logo, capa, fundo e cores;
 - robô de atendimento com cardápio e criação de pedidos;
 - estado da conexão e QR Code do WhatsApp dentro do APK;
 - troca do WhatsApp conectado pelo próprio painel.
 
+No APK, o painel abre diretamente sem pedir senha. A chave exclusiva do
+aplicativo é criada no build e cadastrada separadamente no Worker. O painel
+aberto pelo navegador continua protegido por senha.
+
 ## Cloudflare Pages
-O backend usa o mesmo Workers KV para promoções, produtos e estatísticas.
+O backend usa armazenamento persistente isolado para promoções, produtos,
+pedidos, aparência e configurações.
 
 Configure no projeto:
 1. Um namespace de Workers KV.

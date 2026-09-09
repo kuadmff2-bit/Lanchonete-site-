@@ -14,7 +14,18 @@
     "FCM_PROJECT_ID": "lanchonete-admin",
     "FCM_ANDROID_API_KEY": "AIzaSyBxBWHnh0y5sExe81CIoQ6cV6czDFIHDGs",
     "FCM_ANDROID_APP_ID": "1:35803389315:android:2d8d6884073057cb05aab6",
-    "FCM_SENDER_ID": "35803389315"
+    "FCM_SENDER_ID": "35803389315",
+    "SITE_STYLE_VARIANT": "original",
+    "SITE_DEFAULT_NAME": "Hamburgueria Bae",
+    "SITE_DEFAULT_SUBTITLE": "Cardápio Digital",
+    "SITE_DEFAULT_HERO_TITLE": "Seu lanche.\nSeu estilo.",
+    "SITE_DEFAULT_HERO_TEXT": "Escolha seus itens, informe o endereço e envie o pedido pronto para o WhatsApp.",
+    "SITE_DEFAULT_PRIMARY": "#f58213",
+    "SITE_DEFAULT_ACCENT": "#25d366",
+    "SITE_DEFAULT_BACKGROUND": "#0d0d0d",
+    "SITE_DEFAULT_SURFACE": "#171717",
+    "SITE_DEFAULT_TEXT": "#f5f5f3",
+    "SITE_DEFAULT_HERO_IMAGE": "/assets/hero-burger.jpg"
   },
   "kv_namespaces": [
     {

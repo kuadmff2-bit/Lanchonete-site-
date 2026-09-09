@@ -17,10 +17,10 @@ jobs:
         include:
           - repository: kuadmff2-bit/lanchonete-2
             worker: lanchonete-2
-            ref: a4c8a7fa420d7a34747d8d80f320c778085bb678
+            ref: be04be4cc30dec2faa91e1cd35e9d2e39e66fbcb
           - repository: kuadmff2-bit/lanchonete-3
             worker: lanchonete-3
-            ref: dfd3d2096352a594c0bfc59247509aed386b3165
+            ref: 72abb449a4d97f5e091954023fab646e84252aa1
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-${{ matrix.worker }}-production

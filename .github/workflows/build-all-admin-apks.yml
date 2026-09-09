@@ -1,0 +1,101 @@
+name: Gerar os 3 APKs administrativos com acesso automático
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-all-admin-apks.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-all-admin-apks
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Lanchonete original
+            repository: kuadmff2-bit/Lanchonete-site-
+            ref: main
+            worker: lanchonete-site
+            apk: Lanchonete-Admin.apk
+          - label: Lanchonete 2
+            repository: kuadmff2-bit/lanchonete-2
+            ref: be04be4cc30dec2faa91e1cd35e9d2e39e66fbcb
+            worker: lanchonete-2
+            apk: Lanchonete-2-Admin.apk
+          - label: Lanchonete 3
+            repository: kuadmff2-bit/lanchonete-3
+            ref: 72abb449a4d97f5e091954023fab646e84252aa1
+            worker: lanchonete-3
+            apk: Lanchonete-3-Admin.apk
+
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      WORKER_NAME: ${{ matrix.worker }}
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.ref }}
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Wrangler
+        run: npm install --global wrangler@4
+
+      - name: Criar chave exclusiva sem expor o segredo
+        shell: bash
+        run: |
+          APP_TOKEN="$(printf '%s' "${CLOUDFLARE_API_TOKEN}|${WORKER_NAME}|admin-apk-v1" | sha256sum | cut -d' ' -f1)"
+          echo "::add-mask::$APP_TOKEN"
+          echo "APP_TOKEN=$APP_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Compilar APK
+        working-directory: android-admin-app
+        run: gradle --no-daemon :app:assembleDebug -PadminAppToken="$APP_TOKEN"
+
+      - name: Conferir chave compilada
+        shell: bash
+        run: |
+          unzip -p android-admin-app/app/build/outputs/apk/debug/app-debug.apk classes.dex > "$RUNNER_TEMP/admin-classes.dex"
+          if ! grep -aFq "$APP_TOKEN" "$RUNNER_TEMP/admin-classes.dex"; then
+            echo "::error::A chave automática não foi encontrada no APK."
+            exit 1
+          fi
+
+      - name: Cadastrar chave no Worker
+        shell: bash
+        run: printf '%s' "$APP_TOKEN" | wrangler secret put ADMIN_APP_TOKEN --config wrangler.jsonc
+
+      - name: Preparar arquivo
+        shell: bash
+        run: |
+          mkdir -p out
+          cp android-admin-app/app/build/outputs/apk/debug/app-debug.apk "out/${{ matrix.apk }}"
+
+      - name: Publicar APK como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-apk-${{ matrix.worker }}
+          path: out/${{ matrix.apk }}
+          if-no-files-found: error

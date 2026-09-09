@@ -2,6 +2,11 @@ plugins {
     id 'com.android.application'
 }
 
+def adminAppToken = providers.gradleProperty("adminAppToken").getOrElse("")
+def escapedAdminAppToken = adminAppToken
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+
 android {
     namespace 'com.lanchonete.admin'
     compileSdk 35
@@ -10,8 +15,13 @@ android {
         applicationId 'com.lanchonete.admin'
         minSdk 23
         targetSdk 35
-        versionCode 6
-        versionName '1.6'
+        versionCode 7
+        versionName '1.7'
+        buildConfigField "String", "ADMIN_APP_TOKEN", "\"" + escapedAdminAppToken + "\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     buildTypes {
