@@ -1,4 +1,5 @@
 import worker from "./worker-fcm.js";
+export { AppStorage } from "./durable-storage.js";
 
 // O APK usa o mesmo login seguro do painel web. Não há senha embutida no
 // aplicativo nem autorização baseada apenas no User-Agent.
