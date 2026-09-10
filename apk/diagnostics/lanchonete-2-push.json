@@ -1,8 +1,7 @@
 {
   "worker": "lanchonete-2",
-  "fcmServerConfigured": false,
-  "missingSecretNames": [
-    "FCM_CLIENT_EMAIL",
-    "FCM_PRIVATE_KEY"
-  ]
+  "notificationsConfigured": true,
+  "mode": "relay",
+  "directFirebaseConfigured": false,
+  "relayConfigured": true
 }
