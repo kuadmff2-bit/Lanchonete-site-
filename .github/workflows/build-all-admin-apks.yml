@@ -28,13 +28,13 @@ jobs:
             ref: main
             worker: lanchonete-site
             apk: Lanchonete-Admin.apk
-            versioned_apk: Lanchonete-Admin-v1.8.apk
+            versioned_apk: Lanchonete-Admin-v1.9.apk
           - label: Lanchonete 2
             repository: kuadmff2-bit/lanchonete-2
             ref: main
             worker: lanchonete-2
             apk: Lanchonete-2-Admin.apk
-            versioned_apk: Lanchonete-2-Admin-v1.2.apk
+            versioned_apk: Lanchonete-2-Admin-v1.3.apk
           - label: Lanchonete 3
             repository: kuadmff2-bit/lanchonete-3
             ref: main
