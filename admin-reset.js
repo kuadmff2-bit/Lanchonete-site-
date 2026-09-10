@@ -71,21 +71,18 @@
   })();
 })();
 
-// Carrega a conexão e a configuração transacional do WhatsApp.
+// Carrega a conexão, configuração transacional e as melhorias novas do painel.
 (() => {
-  if (!document.querySelector('script[data-admin-robot]')) {
-    const script = document.createElement('script');
-    script.src = 'admin-robot.js';
+  const loadScript = (src, dataKey) => {
+    if (document.querySelector(`script[${dataKey}]`)) return;
+    const script = document.createElement("script");
+    script.src = src;
     script.defer = true;
-    script.dataset.adminRobot = '1';
+    script.setAttribute(dataKey, "1");
     document.body.appendChild(script);
-  }
+  };
 
-  if (!document.querySelector('script[data-admin-whatsapp]')) {
-    const contactScript = document.createElement('script');
-    contactScript.src = 'admin-whatsapp.js';
-    contactScript.defer = true;
-    contactScript.dataset.adminWhatsapp = '1';
-    document.body.appendChild(contactScript);
-  }
+  loadScript("admin-robot.js", "data-admin-robot");
+  loadScript("admin-whatsapp.js", "data-admin-whatsapp");
+  loadScript("admin-new-features.js", "data-admin-new-features");
 })();
