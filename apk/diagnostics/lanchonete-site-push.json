@@ -1,5 +1,7 @@
 {
   "worker": "lanchonete-site",
-  "fcmServerConfigured": true,
-  "missingSecretNames": []
+  "notificationsConfigured": true,
+  "mode": "direct",
+  "directFirebaseConfigured": true,
+  "relayConfigured": false
 }
