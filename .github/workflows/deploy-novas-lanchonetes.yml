@@ -1,6 +1,6 @@
 name: Deploy Lanchonetes 2 e 3
 
-# Revisão 2026-09-10: publicar a atualização e o contraste final da Lanchonete 2.
+# Revisão 2026-09-10: validar e publicar o relay seguro de notificações da Lanchonete 2.
 
 on:
   workflow_dispatch:
