@@ -1,0 +1,5 @@
+{
+  "worker": "lanchonete-site",
+  "diagnosticAvailable": false,
+  "httpStatus": "401"
+}
