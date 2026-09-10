@@ -1,5 +1,6 @@
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const { fork } = require('child_process');
 
@@ -59,6 +60,12 @@ function readInstances() {
 
 const instances = readInstances();
 
+const pairingPreloadPath = path.resolve(__dirname, 'pairing-preload.js');
+const pairingPreloadExists = fs.existsSync(pairingPreloadPath);
+if (!pairingPreloadExists) {
+  console.warn(`⚠️ Preload module não encontrado em: ${pairingPreloadPath}`);
+}
+
 function startInstance(instance) {
   const { slug: _slug, ...childEnvironment } = instance;
   const pairingPhone = String(pairingPhones.get(instance.slug) || '');
@@ -71,7 +78,7 @@ function startInstance(instance) {
       ROBOT_SUPERVISED: '1',
       ROBOT_DIRECT_CONTROL: '1',
     },
-    execArgv: ['-r', path.join(__dirname, 'pairing-preload.js')],
+    execArgv: pairingPreloadExists ? ['-r', pairingPreloadPath] : [],
     detached: process.platform !== 'win32',
     stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
   });
