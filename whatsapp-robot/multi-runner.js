@@ -8,16 +8,21 @@ const children = new Map();
 const states = new Map();
 const startupTimers = [];
 const pendingMessages = new Map();
+const pairingPhones = new Map();
 let shuttingDown = false;
 
 // Cada Worker já mantém a senha administrativa como segredo no Cloudflare.
 // O supervisor conhece somente o SHA-256 público correspondente e aceita
 // essa senha como credencial de controle sem armazenar a senha em texto puro.
 const ADMIN_CONTROL_HASHES = new Map([
-  ['lanchonete-whatsapp', 'c87d431851bb55cddb601e9bd8bd7eadd7bc0f4906e41318e17d63379a23b483'],
+  ['lanchonete-whatsapp', 'c87d431851bb55cddb601e9bd8bd7c3568ba4c0a17d87763c50d46fe8dcfae1d'],
   ['lanchonete-2-whatsapp', '3c1ff0e77623f56bdf0eda50d37b7c3568ba4c0a17d87763c50d46fe8dcfae1d'],
   ['lanchonete-3-whatsapp', 'bfcfc09b0c6942fcc6b279a37c51567b95ade470d4f3f218899c225227435c3b'],
 ]);
+
+// Hash correto da instância original. Mantido separado para não depender de
+// configuração em texto puro no Railway.
+ADMIN_CONTROL_HASHES.set('lanchonete-whatsapp', 'c87d431851bb55cddb601e9bd8bd7eadd7bc0f4906e41318e17d63379a23b483');
 
 function normalizeInstance(item, index) {
   const name = String(item?.name || `instancia-${index + 1}`);
@@ -56,14 +61,17 @@ const instances = readInstances();
 
 function startInstance(instance) {
   const { slug: _slug, ...childEnvironment } = instance;
+  const pairingPhone = String(pairingPhones.get(instance.slug) || '');
   const child = fork(path.join(__dirname, 'index.js'), [], {
     env: {
       ...process.env,
       ...childEnvironment,
+      WPP_PAIRING_PHONE: pairingPhone,
       DISABLE_HTTP_SERVER: '1',
       ROBOT_SUPERVISED: '1',
       ROBOT_DIRECT_CONTROL: '1',
     },
+    execArgv: ['-r', path.join(__dirname, 'pairing-preload.js')],
     detached: process.platform !== 'win32',
     stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
   });
@@ -74,11 +82,13 @@ function startInstance(instance) {
     connected: false,
     qrReady: false,
     qrImage: null,
-    authState: 'starting',
+    pairingCode: null,
+    authState: pairingPhone ? 'preparing-code' : 'starting',
     connectedAt: null,
     lastError: null,
   });
-  console.log(`🚀 Iniciando ${instance.name}.`);
+  console.log(`🚀 Iniciando ${instance.name}${pairingPhone ? ' em modo código temporário' : ''}.`);
+
   child.on('message', (message) => {
     if (message?.type === 'transactional-result' && message.requestId) {
       const pending = pendingMessages.get(String(message.requestId));
@@ -89,17 +99,41 @@ function startInstance(instance) {
       else pending.resolve(message.result || { sent: false });
       return;
     }
+
+    if (message?.type === 'pairing-code') {
+      const code = String(message.code || '').replace(/\s+/g, '').slice(0, 32);
+      if (!code) return;
+      const previous = states.get(instance.slug) || {};
+      states.set(instance.slug, {
+        ...previous,
+        ok: true,
+        connected: false,
+        qrReady: false,
+        qrImage: null,
+        pairingCode: code,
+        authState: 'pairing-code',
+        lastError: null,
+      });
+      console.log(`🔐 Código temporário pronto para ${instance.name}.`);
+      return;
+    }
+
     if (message?.type !== 'robot-state' || !message.state || typeof message.state !== 'object') return;
+    const previous = states.get(instance.slug) || {};
+    const isConnected = Boolean(message.state.connected);
+    if (isConnected) pairingPhones.delete(instance.slug);
     states.set(instance.slug, {
       ok: true,
-      connected: Boolean(message.state.connected),
+      connected: isConnected,
       qrReady: Boolean(message.state.qrReady && message.state.qrImage),
       qrImage: message.state.qrImage || null,
-      authState: String(message.state.authState || 'starting'),
+      pairingCode: isConnected ? null : (previous.pairingCode || null),
+      authState: String(message.state.authState || (pairingPhones.has(instance.slug) ? 'preparing-code' : 'starting')),
       connectedAt: message.state.connectedAt || null,
       lastError: message.state.lastError || null,
     });
   });
+
   child.on('exit', (code, signal) => {
     for (const [requestId, pending] of pendingMessages) {
       if (pending.instanceName !== instance.name) continue;
@@ -114,12 +148,13 @@ function startInstance(instance) {
       connected: false,
       qrReady: false,
       qrImage: null,
-      authState: shuttingDown ? 'stopped' : 'restarting',
+      pairingCode: null,
+      authState: shuttingDown ? 'stopped' : (pairingPhones.has(instance.slug) ? 'preparing-code' : 'restarting'),
       connectedAt: null,
       lastError: null,
     });
     console.warn(`⚠️ ${instance.name} encerrou (${signal || code || 0}).`);
-    if (!shuttingDown) setTimeout(() => startInstance(instance), 5000).unref();
+    if (!shuttingDown) setTimeout(() => startInstance(instance), 3500).unref();
   });
 }
 
@@ -198,6 +233,13 @@ function readRequestJson(req, maxBytes = 262144) {
   });
 }
 
+function normalizePairingPhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.length === 10 || digits.length === 11) digits = `55${digits}`;
+  if (!/^55\d{10,11}$/.test(digits)) return '';
+  return `+${digits}`;
+}
+
 function forwardTransactional(instance, action, payload) {
   const child = children.get(instance.name);
   if (!child?.connected) return Promise.reject(new Error('A instância do WhatsApp está reiniciando.'));
@@ -220,7 +262,7 @@ function forwardTransactional(instance, action, payload) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  const controlMatch = url.pathname.match(/^\/instances\/([^/]+)\/control\/(status|restart|reset|send-order|send-status)$/);
+  const controlMatch = url.pathname.match(/^\/instances\/([^/]+)\/control\/(status|restart|reset|pair-code|send-order|send-status)$/);
 
   if (controlMatch) {
     let slug = '';
@@ -245,6 +287,7 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         connected: false,
         qrReady: false,
+        pairingCode: null,
         authState: 'starting',
       });
       return;
@@ -265,10 +308,57 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (action === 'pair-code') {
+      if (req.method !== 'POST') {
+        sendJson(res, { error: 'Método não permitido.' }, 405);
+        return;
+      }
+      let payload;
+      try { payload = await readRequestJson(req); }
+      catch { sendJson(res, { error: 'Dados inválidos.' }, 400); return; }
+      const phoneNumber = normalizePairingPhone(payload?.phoneNumber);
+      if (!phoneNumber) {
+        sendJson(res, { error: 'Informe um número de WhatsApp válido com DDD.' }, 400);
+        return;
+      }
+
+      pairingPhones.set(instance.slug, phoneNumber);
+      states.set(instance.slug, {
+        ok: true,
+        connected: false,
+        qrReady: false,
+        qrImage: null,
+        pairingCode: null,
+        authState: 'preparing-code',
+        connectedAt: null,
+        lastError: null,
+      });
+
+      const child = children.get(instance.name);
+      if (child?.connected) {
+        try { child.send({ type: 'robot-control', action: 'reset' }); }
+        catch { terminateProcessTree(child, 'SIGKILL'); }
+      } else if (child) {
+        terminateProcessTree(child, 'SIGKILL');
+      } else {
+        setTimeout(() => { if (!shuttingDown && !children.has(instance.name)) startInstance(instance); }, 250).unref();
+      }
+
+      sendJson(res, {
+        ok: true,
+        accepted: true,
+        action: 'pair-code',
+        message: 'Preparando o código temporário. Ele aparecerá no painel em alguns segundos.'
+      }, 202);
+      return;
+    }
+
     if (req.method !== 'POST') {
       sendJson(res, { error: 'Método não permitido.' }, 405);
       return;
     }
+
+    pairingPhones.delete(instance.slug);
     const child = children.get(instance.name);
     if (!child?.connected) {
       sendJson(res, { error: 'A instância está reiniciando.' }, 503);
@@ -280,6 +370,7 @@ const server = http.createServer(async (req, res) => {
       connected: false,
       qrReady: false,
       qrImage: null,
+      pairingCode: null,
       authState: action === 'reset' ? 'resetting' : 'restarting',
       connectedAt: null,
       lastError: null,
@@ -303,6 +394,7 @@ const server = http.createServer(async (req, res) => {
   const running = instances.map((instance) => ({
     name: instance.name,
     running: Boolean(children.get(instance.name)?.connected),
+    whatsappConnected: Boolean(states.get(instance.slug)?.connected),
   }));
   const ok = running.every((item) => item.running);
   sendJson(res, { ok, instances: running }, ok ? 200 : 503);
