@@ -73,15 +73,19 @@ jobs:
         shell: bash
         run: |
           mkdir -p apk/diagnostics
-          curl --fail --silent --show-error \
+          HTTP_CODE="$(curl --silent --show-error \
             -H "x-admin-app-token: $APP_TOKEN" \
-            "$WORKER_URL/api/push/register" \
-            -o "$RUNNER_TEMP/push-device-status.json"
-          PUSH_FILE="$RUNNER_TEMP/push-device-status.json" OUT_FILE="apk/diagnostics/lanchonete-site-devices.json" node <<'NODE'
+            -o "$RUNNER_TEMP/push-device-status.json" \
+            -w '%{http_code}' \
+            "$WORKER_URL/api/push/register" || true)"
+
+          if [[ "$HTTP_CODE" =~ ^2 ]]; then
+            PUSH_FILE="$RUNNER_TEMP/push-device-status.json" OUT_FILE="apk/diagnostics/lanchonete-site-devices.json" node <<'NODE'
           const fs = require('fs');
           const data = JSON.parse(fs.readFileSync(process.env.PUSH_FILE, 'utf8'));
           const status = {
             worker: 'lanchonete-site',
+            diagnosticAvailable: true,
             fcmServerConfigured: Boolean(data.configured),
             registeredDevices: Number(data.devices || 0)
           };
@@ -91,6 +95,16 @@ jobs:
             console.log('::warning title=Nenhum APK cadastrado no push::Abra o APK atualizado e permita notificações para registrar este celular.');
           }
           NODE
+          else
+            cat > apk/diagnostics/lanchonete-site-devices.json <<EOF
+          {
+            "worker": "lanchonete-site",
+            "diagnosticAvailable": false,
+            "httpStatus": "$HTTP_CODE"
+          }
+          EOF
+            echo "::warning title=Diagnóstico de aparelhos indisponível::A consulta respondeu HTTP ${HTTP_CODE:-sem-resposta}; o APK continuará sendo gerado normalmente."
+          fi
 
       - name: Prepare APK
         run: |
