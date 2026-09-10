@@ -72,14 +72,19 @@ jobs:
         shell: bash
         run: |
           wrangler secret list --config source/wrangler.jsonc --format json > "$RUNNER_TEMP/worker-secrets.json"
-          SECRET_LIST_FILE="$RUNNER_TEMP/worker-secrets.json" node <<'NODE'
+          SECRET_LIST_FILE="$RUNNER_TEMP/worker-secrets.json" PUSH_STATUS_FILE="$RUNNER_TEMP/push-status.json" node <<'NODE'
           const fs = require('fs');
-          const file = process.env.SECRET_LIST_FILE;
-          const entries = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const entries = JSON.parse(fs.readFileSync(process.env.SECRET_LIST_FILE, 'utf8'));
           const names = new Set(entries.map((item) => String(item?.name || '')));
           const required = ['FCM_CLIENT_EMAIL', 'FCM_PRIVATE_KEY'];
           const missing = required.filter((name) => !names.has(name));
-          if (missing.length) {
+          const configured = missing.length === 0;
+          fs.writeFileSync(process.env.PUSH_STATUS_FILE, JSON.stringify({
+            worker: process.env.WORKER_NAME,
+            fcmServerConfigured: configured,
+            missingSecretNames: missing
+          }, null, 2) + '\n');
+          if (!configured) {
             console.log(`::warning title=Firebase incompleto::${process.env.WORKER_NAME}: faltam ${missing.join(', ')}. O APK pode registrar o celular, mas o Worker não conseguirá enviar a notificação de novo pedido.`);
           } else {
             console.log(`Firebase push configurado no Worker ${process.env.WORKER_NAME}.`);
@@ -115,12 +120,15 @@ jobs:
         run: |
           mkdir -p out
           cp source/android-admin-app/app/build/outputs/apk/debug/app-debug.apk "out/${{ matrix.apk }}"
+          cp "$RUNNER_TEMP/push-status.json" "out/push-status-${{ matrix.worker }}.json"
 
       - name: Publicar APK como artefato
         uses: actions/upload-artifact@v4
         with:
           name: admin-apk-${{ matrix.worker }}
-          path: out/${{ matrix.apk }}
+          path: |
+            out/${{ matrix.apk }}
+            out/push-status-${{ matrix.worker }}.json
           if-no-files-found: error
 
       - name: Abrir repositório principal
@@ -133,15 +141,16 @@ jobs:
       - name: Gravar APK final no Git
         shell: bash
         run: |
-          mkdir -p publish/apk
+          mkdir -p publish/apk/diagnostics
           cp "out/${{ matrix.apk }}" "publish/apk/${{ matrix.apk }}"
           cp "out/${{ matrix.apk }}" "publish/apk/${{ matrix.versioned_apk }}"
+          cp "out/push-status-${{ matrix.worker }}.json" "publish/apk/diagnostics/${{ matrix.worker }}-push.json"
           cd publish
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "apk/${{ matrix.apk }}" "apk/${{ matrix.versioned_apk }}"
+          git add "apk/${{ matrix.apk }}" "apk/${{ matrix.versioned_apk }}" "apk/diagnostics/${{ matrix.worker }}-push.json"
           if git diff --cached --quiet; then
-            echo "APK já está atualizado."
+            echo "APK e diagnóstico já estão atualizados."
             exit 0
           fi
           git commit -m "Atualizar ${{ matrix.label }} — APK final [skip ci]"
