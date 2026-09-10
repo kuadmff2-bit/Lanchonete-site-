@@ -1,0 +1,66 @@
+name: Sincronizar Firebase dos Workers 2 e 3
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-fcm-workers.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      FCM_CLIENT_EMAIL: ${{ secrets.FCM_CLIENT_EMAIL }}
+      FCM_PRIVATE_KEY: ${{ secrets.FCM_PRIVATE_KEY }}
+
+    steps:
+      - name: Conferir se as credenciais existem no GitHub
+        id: credentials
+        shell: bash
+        run: |
+          if [ -z "$FCM_CLIENT_EMAIL" ] || [ -z "$FCM_PRIVATE_KEY" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Credenciais Firebase não estão no GitHub::Os valores FCM_CLIENT_EMAIL e/ou FCM_PRIVATE_KEY não estão cadastrados como GitHub Secrets. Nenhum segredo foi exibido."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Credenciais Firebase encontradas com segurança."
+          fi
+
+      - name: Instalar Wrangler
+        if: steps.credentials.outputs.available == 'true'
+        run: npm install --global wrangler@4
+
+      - name: Checkout Lanchonete 2
+        if: steps.credentials.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: kuadmff2-bit/lanchonete-2
+          ref: main
+          path: lanchonete-2
+
+      - name: Cadastrar Firebase na Lanchonete 2
+        if: steps.credentials.outputs.available == 'true'
+        shell: bash
+        run: |
+          printf '%s' "$FCM_CLIENT_EMAIL" | wrangler secret put FCM_CLIENT_EMAIL --config lanchonete-2/wrangler.jsonc
+          printf '%s' "$FCM_PRIVATE_KEY" | wrangler secret put FCM_PRIVATE_KEY --config lanchonete-2/wrangler.jsonc
+
+      - name: Checkout Lanchonete 3
+        if: steps.credentials.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: kuadmff2-bit/lanchonete-3
+          ref: main
+          path: lanchonete-3
+
+      - name: Cadastrar Firebase na Lanchonete 3
+        if: steps.credentials.outputs.available == 'true'
+        shell: bash
+        run: |
+          printf '%s' "$FCM_CLIENT_EMAIL" | wrangler secret put FCM_CLIENT_EMAIL --config lanchonete-3/wrangler.jsonc
+          printf '%s' "$FCM_PRIVATE_KEY" | wrangler secret put FCM_PRIVATE_KEY --config lanchonete-3/wrangler.jsonc
