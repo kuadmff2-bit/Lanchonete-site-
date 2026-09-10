@@ -34,6 +34,9 @@ jobs:
           repository: ${{ matrix.repository }}
           ref: ${{ matrix.ref }}
 
+      - name: Validar código e testes
+        run: npm run check
+
       - name: Instalar Wrangler
         run: npm install --global wrangler@4
 
