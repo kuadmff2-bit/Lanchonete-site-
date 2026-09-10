@@ -21,6 +21,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       WORKER_NAME: lanchonete-site
+      WORKER_URL: https://lanchonete-site.kuadmff2.workers.dev
 
     steps:
       - name: Checkout
@@ -68,6 +69,29 @@ jobs:
         shell: bash
         run: printf '%s' "$APP_TOKEN" | wrangler secret put ADMIN_APP_TOKEN --config wrangler.jsonc
 
+      - name: Conferir aparelhos cadastrados no push
+        shell: bash
+        run: |
+          mkdir -p apk/diagnostics
+          curl --fail --silent --show-error \
+            -H "x-admin-app-token: $APP_TOKEN" \
+            "$WORKER_URL/api/push/register" \
+            -o "$RUNNER_TEMP/push-device-status.json"
+          PUSH_FILE="$RUNNER_TEMP/push-device-status.json" OUT_FILE="apk/diagnostics/lanchonete-site-devices.json" node <<'NODE'
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync(process.env.PUSH_FILE, 'utf8'));
+          const status = {
+            worker: 'lanchonete-site',
+            fcmServerConfigured: Boolean(data.configured),
+            registeredDevices: Number(data.devices || 0)
+          };
+          fs.writeFileSync(process.env.OUT_FILE, JSON.stringify(status, null, 2) + '\n');
+          console.log(`Push: servidor=${status.fcmServerConfigured ? 'ok' : 'incompleto'}, aparelhos=${status.registeredDevices}`);
+          if (status.registeredDevices < 1) {
+            console.log('::warning title=Nenhum APK cadastrado no push::Abra o APK atualizado e permita notificações para registrar este celular.');
+          }
+          NODE
+
       - name: Prepare APK
         run: |
           mkdir -p apk
@@ -78,13 +102,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Lanchonete-Admin-v1.9
-          path: apk/Lanchonete-Admin-v1.9.apk
+          path: |
+            apk/Lanchonete-Admin-v1.9.apk
+            apk/diagnostics/lanchonete-site-devices.json
 
       - name: Save APK in repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apk/Lanchonete-Admin.apk apk/Lanchonete-Admin-v1.9.apk
+          git add apk/Lanchonete-Admin.apk apk/Lanchonete-Admin-v1.9.apk apk/diagnostics/lanchonete-site-devices.json
           if git diff --cached --quiet; then
             echo "APK sem alterações."
             exit 0
