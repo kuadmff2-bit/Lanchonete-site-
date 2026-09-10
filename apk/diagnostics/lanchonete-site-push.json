@@ -1,0 +1,5 @@
+{
+  "worker": "lanchonete-site",
+  "fcmServerConfigured": true,
+  "missingSecretNames": []
+}
