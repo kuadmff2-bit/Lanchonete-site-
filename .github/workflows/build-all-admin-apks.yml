@@ -68,6 +68,24 @@ jobs:
       - name: Wrangler
         run: npm install --global wrangler@4
 
+      - name: Verificar configuração de notificações
+        shell: bash
+        run: |
+          wrangler secret list --config source/wrangler.jsonc --format json > "$RUNNER_TEMP/worker-secrets.json"
+          SECRET_LIST_FILE="$RUNNER_TEMP/worker-secrets.json" node <<'NODE'
+          const fs = require('fs');
+          const file = process.env.SECRET_LIST_FILE;
+          const entries = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const names = new Set(entries.map((item) => String(item?.name || '')));
+          const required = ['FCM_CLIENT_EMAIL', 'FCM_PRIVATE_KEY'];
+          const missing = required.filter((name) => !names.has(name));
+          if (missing.length) {
+            console.log(`::warning title=Firebase incompleto::${process.env.WORKER_NAME}: faltam ${missing.join(', ')}. O APK pode registrar o celular, mas o Worker não conseguirá enviar a notificação de novo pedido.`);
+          } else {
+            console.log(`Firebase push configurado no Worker ${process.env.WORKER_NAME}.`);
+          }
+          NODE
+
       - name: Criar chave exclusiva sem expor o segredo
         shell: bash
         run: |
