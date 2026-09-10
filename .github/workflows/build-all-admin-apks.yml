@@ -72,22 +72,26 @@ jobs:
         shell: bash
         run: |
           wrangler secret list --config source/wrangler.jsonc --format json > "$RUNNER_TEMP/worker-secrets.json"
-          SECRET_LIST_FILE="$RUNNER_TEMP/worker-secrets.json" PUSH_STATUS_FILE="$RUNNER_TEMP/push-status.json" node <<'NODE'
+          SECRET_LIST_FILE="$RUNNER_TEMP/worker-secrets.json" CONFIG_FILE="source/wrangler.jsonc" PUSH_STATUS_FILE="$RUNNER_TEMP/push-status.json" node <<'NODE'
           const fs = require('fs');
           const entries = JSON.parse(fs.readFileSync(process.env.SECRET_LIST_FILE, 'utf8'));
+          const config = JSON.parse(fs.readFileSync(process.env.CONFIG_FILE, 'utf8'));
           const names = new Set(entries.map((item) => String(item?.name || '')));
-          const required = ['FCM_CLIENT_EMAIL', 'FCM_PRIVATE_KEY'];
-          const missing = required.filter((name) => !names.has(name));
-          const configured = missing.length === 0;
+          const direct = names.has('FCM_CLIENT_EMAIL') && names.has('FCM_PRIVATE_KEY');
+          const relay = names.has('PUSH_RELAY_TOKEN') && Boolean(String(config?.vars?.PUSH_RELAY_URL || '').trim());
+          const configured = direct || relay;
+          const mode = direct ? 'direct' : relay ? 'relay' : 'none';
           fs.writeFileSync(process.env.PUSH_STATUS_FILE, JSON.stringify({
             worker: process.env.WORKER_NAME,
-            fcmServerConfigured: configured,
-            missingSecretNames: missing
+            notificationsConfigured: configured,
+            mode,
+            directFirebaseConfigured: direct,
+            relayConfigured: relay
           }, null, 2) + '\n');
           if (!configured) {
-            console.log(`::warning title=Firebase incompleto::${process.env.WORKER_NAME}: faltam ${missing.join(', ')}. O APK pode registrar o celular, mas o Worker não conseguirá enviar a notificação de novo pedido.`);
+            console.log(`::warning title=Notificações incompletas::${process.env.WORKER_NAME}: não há Firebase direto nem relay de push configurado.`);
           } else {
-            console.log(`Firebase push configurado no Worker ${process.env.WORKER_NAME}.`);
+            console.log(`Notificações configuradas no Worker ${process.env.WORKER_NAME} via ${mode}.`);
           }
           NODE
 
