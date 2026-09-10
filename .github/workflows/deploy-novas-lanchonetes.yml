@@ -1,5 +1,7 @@
 name: Deploy Lanchonetes 2 e 3
 
+# Revisão 2026-09-10: publicar a atualização transacional da Lanchonete 2.
+
 on:
   workflow_dispatch:
   push:

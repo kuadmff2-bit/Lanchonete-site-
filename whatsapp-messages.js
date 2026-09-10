@@ -4,7 +4,7 @@ const AUTOMATIC_STATUSES = new Set(["confirmado", "saiu_entrega", "cancelado"]);
 
 function serviceConfig(env) {
   const url = String(env.ROBOT_SERVICE_URL || "").trim().replace(/\/$/, "");
-  const token = String(env.ROBOT_CONTROL_TOKEN || env.ADMIN_PASSWORD || "").trim();
+  const token = String(env.ROBOT_CONTROL_TOKEN || env.ADMIN_PASSWORD || env.ADMIN_APP_TOKEN || "").trim();
   if (!url || !token) return null;
   try {
     const parsed = new URL(url);
