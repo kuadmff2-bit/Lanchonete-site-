@@ -21,6 +21,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validar código e testes
+        run: npm run check
+
       - name: Instalar Wrangler globalmente
         run: npm install --global wrangler@4
 
