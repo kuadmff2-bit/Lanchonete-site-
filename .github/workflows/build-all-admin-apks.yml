@@ -40,7 +40,7 @@ jobs:
             ref: main
             worker: lanchonete-3
             apk: Lanchonete-3-Admin.apk
-            versioned_apk: Lanchonete-3-Admin-v1.2.apk
+            versioned_apk: Lanchonete-3-Admin-v1.3.apk
 
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
