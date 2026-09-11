@@ -1,6 +1,6 @@
 name: Deploy Lanchonetes 2 e 3
 
-# Revisão 2026-09-11: publicar navegação por gesto horizontal entre as funções do painel nas Lanchonetes 2 e 3.
+# Revisão 2026-09-11: publicar gesto horizontal revisado, mais estável e disponível em praticamente toda a tela do painel.
 
 on:
   workflow_dispatch:
