@@ -1,6 +1,6 @@
 name: Deploy Lanchonetes 2 e 3
 
-# Revisão 2026-09-12: publicar responsividade dos produtos, topo simplificado, redes sociais e separação dos números de WhatsApp.
+# Revisão 2026-09-13: publicar painel WhatsApp simplificado, com números de atendimento e robô separados.
 
 on:
   workflow_dispatch:
