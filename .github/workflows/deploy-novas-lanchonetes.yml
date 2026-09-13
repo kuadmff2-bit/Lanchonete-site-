@@ -1,6 +1,6 @@
 name: Deploy Lanchonetes 2 e 3
 
-# Revisão 2026-09-11: publicar limpeza da área do WhatsApp e novos controles de promoção nas Lanchonetes 2 e 3.
+# Revisão 2026-09-12: publicar responsividade dos produtos, topo simplificado, redes sociais e separação dos números de WhatsApp.
 
 on:
   workflow_dispatch:
