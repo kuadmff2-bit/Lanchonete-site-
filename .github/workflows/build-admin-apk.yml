@@ -132,3 +132,5 @@ jobs:
           git commit -m "Atualizar APK administrador v1.9 [skip ci]"
           git pull --rebase origin main
           git push
+
+# rebuild nativefix5
