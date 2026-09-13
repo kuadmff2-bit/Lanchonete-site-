@@ -1,6 +1,6 @@
 name: Deploy Lanchonetes 2 e 3
 
-# Revisão 2026-09-13: publicar painel WhatsApp simplificado, com números de atendimento e robô separados.
+# Revisão 2026-09-13: publicar correção de carregamento dos três painéis.
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
           - repository: kuadmff2-bit/lanchonete-3
             worker: lanchonete-3
             ref: main
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     concurrency:
       group: deploy-${{ matrix.worker }}-production
       cancel-in-progress: true
