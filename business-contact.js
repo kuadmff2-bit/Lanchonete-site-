@@ -1,6 +1,13 @@
 (() => {
   const FALLBACK_NUMBER = "5592992973832";
+  const SETTINGS_ID = "__SYS_CONTACTS__";
   window.BUSINESS_WHATSAPP_NUMBER = FALLBACK_NUMBER;
+
+  const icons = {
+    facebook: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.6 22v-8h2.7l.4-3.1h-3.1V9c0-.9.3-1.6 1.6-1.6H17V4.6c-.3 0-1.4-.1-2.6-.1-2.6 0-4.4 1.6-4.4 4.5v1.9H7.5V14h2.9v8h3.2Z"/></svg>',
+    whatsapp: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a9.7 9.7 0 0 0-8.3 14.7L2.4 22l5.4-1.4A9.8 9.8 0 1 0 12 2Zm0 17.7c-1.4 0-2.8-.4-4-1.1l-.3-.2-3.2.8.9-3.1-.2-.3A7.7 7.7 0 1 1 12 19.7Zm4.2-5.8c-.2-.1-1.4-.7-1.7-.8-.2-.1-.4-.1-.6.2-.2.2-.6.8-.8 1-.1.2-.3.2-.5.1-1.4-.7-2.4-1.4-3.3-3-.2-.3.2-.3.7-1 .1-.2.1-.4 0-.6l-.7-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.1.2 2.1 3.3 5.2 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.4-.6 1.6-1.1.2-.6.2-1 .2-1.1 0-.2-.2-.3-.4-.4Z"/></svg>',
+    instagram: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.7" r="1.2" fill="currentColor"/></svg>'
+  };
 
   function normalize(value) {
     let digits = String(value || "").replace(/\D/g, "");
@@ -18,24 +25,71 @@
     return `(${ddd}) ${number.slice(0, 4)}-${number.slice(4)}`;
   }
 
+  function ensureFooter() {
+    const footer = document.querySelector("footer");
+    if (!footer) return null;
+    footer.classList.add("social-footer-host");
+    let nav = footer.querySelector("#socialFooterLinks");
+    if (!nav) {
+      const style = document.createElement("style");
+      style.textContent = `footer.social-footer-host{display:flex!important;flex-wrap:wrap!important;align-items:center!important;justify-content:space-between!important;gap:8px 18px!important}.social-footer-links{width:100%;display:flex;justify-content:center;align-items:center;gap:12px;padding-top:16px;order:3}.social-footer-link{width:48px;height:48px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);background:var(--surface,var(--card,#171717));color:var(--text,#fff);box-shadow:0 6px 18px rgba(0,0,0,.12);transition:transform .16s ease}.social-footer-link[hidden]{display:none!important}.social-footer-link svg{width:24px;height:24px;display:block}:root[data-theme="light"] .social-footer-link{background:#fff!important;color:#171717!important;border-color:rgba(0,0,0,.18)!important}:root[data-theme="dark"] .social-footer-link{background:rgba(255,255,255,.04)!important;color:#fff!important;border-color:rgba(255,255,255,.18)!important}@media(max-width:560px){.social-footer-links{justify-content:flex-start}}`;
+      document.head.appendChild(style);
+      nav = document.createElement("nav");
+      nav.id = "socialFooterLinks";
+      nav.className = "social-footer-links";
+      nav.setAttribute("aria-label", "Redes sociais");
+      nav.innerHTML = `<a class="social-footer-link" data-social="facebook" target="_blank" rel="noopener noreferrer" aria-label="Facebook" hidden>${icons.facebook}</a><a class="social-footer-link" data-social="whatsapp" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">${icons.whatsapp}</a><a class="social-footer-link" data-social="instagram" target="_blank" rel="noopener noreferrer" aria-label="Instagram" hidden>${icons.instagram}</a>`;
+      footer.appendChild(nav);
+    }
+    return nav;
+  }
+
+  function applySocials(settings = {}) {
+    const nav = ensureFooter();
+    if (!nav) return;
+    const whatsapp = nav.querySelector('[data-social="whatsapp"]');
+    const facebook = nav.querySelector('[data-social="facebook"]');
+    const instagram = nav.querySelector('[data-social="instagram"]');
+    whatsapp.href = `https://wa.me/${normalize(window.BUSINESS_WHATSAPP_NUMBER) || FALLBACK_NUMBER}`;
+    const fb = String(settings.f || "").trim();
+    const ig = String(settings.i || "").trim();
+    facebook.hidden = !fb;
+    instagram.hidden = !ig;
+    if (fb) facebook.href = fb;
+    if (ig) instagram.href = ig;
+  }
+
   function apply(number, display) {
     const normalized = normalize(number) || FALLBACK_NUMBER;
     window.BUSINESS_WHATSAPP_NUMBER = normalized;
-
     document.querySelectorAll('[data-business-whatsapp-link], .whatsapp-mini').forEach((link) => {
       link.href = `https://wa.me/${normalized}`;
     });
-
     document.querySelectorAll('[data-business-whatsapp-display]').forEach((el) => {
       el.textContent = display || format(normalized);
     });
-
+    applySocials(window.BUSINESS_SOCIAL_SETTINGS || {});
     window.dispatchEvent(new CustomEvent('business-whatsapp-updated', {
       detail: { whatsappNumber: normalized, whatsappDisplay: display || format(normalized) }
     }));
   }
 
+  async function loadSocials() {
+    try {
+      const response = await fetch('/api/promos', { cache: 'no-store' });
+      const data = await response.json();
+      const item = Array.isArray(data?.promotions) ? data.promotions.find((promo) => String(promo?.id || "") === SETTINGS_ID) : null;
+      const settings = item?.description ? JSON.parse(item.description) : {};
+      window.BUSINESS_SOCIAL_SETTINGS = settings;
+      applySocials(settings);
+    } catch {
+      window.BUSINESS_SOCIAL_SETTINGS = {};
+      applySocials({});
+    }
+  }
+
   async function load() {
+    ensureFooter();
     try {
       const response = await fetch('/api/business-contact', { cache: 'no-store' });
       const data = await response.json();
@@ -44,9 +98,10 @@
     } catch (_) {
       apply(FALLBACK_NUMBER, format(FALLBACK_NUMBER));
     }
+    await loadSocials();
   }
 
-  window.BusinessContact = { load, apply, normalize, format };
+  window.BusinessContact = { load, apply, normalize, format, loadSocials };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', load);
   else load();
 })();
