@@ -15,6 +15,7 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -22,18 +23,18 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private static final String ADMIN_URL = "https://lanchonete-site.kuadmff2.workers.dev/admin?v=20260913-nativefix4";
+    private static final String ADMIN_URL = "https://lanchonete-site.kuadmff2.workers.dev/admin?v=20260913-nativefix5";
     private static final String ALLOWED_HOST = "lanchonete-site.kuadmff2.workers.dev";
-    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.9-nativefix4";
+    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.9-nativefix5";
     private static final int FILE_CHOOSER_REQUEST = 4102;
-    private static final long SPLASH_FAILSAFE_MS = 6000L;
+    private static final long SPLASH_MAX_MS = 2500L;
 
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private FrameLayout root;
     private WebView webView;
     private SplashView splashView;
     private ValueCallback<Uri[]> filePathCallback;
-    private boolean appRevealed = false;
+    private boolean splashRemoved = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,7 +45,9 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(13, 13, 13));
-        webView.setVisibility(View.INVISIBLE);
+        // A WebView fica visível desde o início. O splash é apenas uma camada por cima.
+        // Assim nenhuma API, JS ou callback consegue manter o app preso na abertura.
+        webView.setVisibility(View.VISIBLE);
         root.addView(webView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -62,13 +65,8 @@ public class MainActivity extends Activity {
         webView.clearCache(true);
         webView.loadUrl(ADMIN_URL);
 
-        // O splash nunca mais pode ficar preso por uma API, JavaScript ou callback da WebView.
-        uiHandler.postDelayed(() -> {
-            if (!appRevealed && webView != null) {
-                forceShowPanel();
-                revealAdmin();
-            }
-        }, SPLASH_FAILSAFE_MS);
+        // Failsafe absoluto: o splash sai mesmo se a página, a internet ou o JavaScript falharem.
+        uiHandler.postDelayed(this::removeSplash, SPLASH_MAX_MS);
     }
 
     private void configureWebView() {
@@ -120,7 +118,7 @@ public class MainActivity extends Activity {
                 super.onPageFinished(view, url);
                 if (url != null && url.contains("/admin")) {
                     forceShowPanel();
-                    revealAdmin();
+                    removeSplash();
                     refreshAdminData();
                 }
             }
@@ -129,8 +127,16 @@ public class MainActivity extends Activity {
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
                 if (request != null && request.isForMainFrame()) {
-                    revealAdmin();
+                    removeSplash();
                     Toast.makeText(MainActivity.this, "Não foi possível carregar o painel. Verifique a internet e tente novamente.", Toast.LENGTH_LONG).show();
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+                super.onReceivedHttpError(view, request, errorResponse);
+                if (request != null && request.isForMainFrame()) {
+                    removeSplash();
                 }
             }
         });
@@ -200,23 +206,17 @@ public class MainActivity extends Activity {
         webView.evaluateJavascript(script, null);
     }
 
-    private void revealAdmin() {
-        if (appRevealed || webView == null) return;
-        appRevealed = true;
-        webView.setAlpha(0f);
-        webView.setVisibility(View.VISIBLE);
-        webView.animate().alpha(1f).setDuration(160L).start();
-
+    private void removeSplash() {
+        if (splashRemoved) return;
+        splashRemoved = true;
+        if (webView != null) {
+            webView.setVisibility(View.VISIBLE);
+            webView.setAlpha(1f);
+        }
         if (splashView != null) {
             splashView.stopAnimation();
-            splashView.animate()
-                    .alpha(0f)
-                    .setDuration(180L)
-                    .withEndAction(() -> {
-                        if (root != null && splashView != null) root.removeView(splashView);
-                        splashView = null;
-                    })
-                    .start();
+            if (root != null) root.removeView(splashView);
+            splashView = null;
         }
     }
 
