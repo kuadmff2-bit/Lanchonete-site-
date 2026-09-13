@@ -60,6 +60,17 @@
     return theme;
   }
 
+  function installApkReadyGuard() {
+    if (!(navigator.userAgent || "").includes("LanchoneteAdminApp/")) return;
+    let ticks = 0;
+    const timer = setInterval(() => {
+      const app = document.getElementById("adminApp");
+      if (app && !app.hidden) document.documentElement.dataset.apkReady = "1";
+      ticks += 1;
+      if (ticks >= 60) clearInterval(timer);
+    }, 250);
+  }
+
   installPublicHeaderFix();
   apply(storedTheme(), false);
 
@@ -70,9 +81,14 @@
   });
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => { installPublicHeaderFix(); updateButtons(); });
+    document.addEventListener("DOMContentLoaded", () => {
+      installPublicHeaderFix();
+      updateButtons();
+      installApkReadyGuard();
+    });
   } else {
     updateButtons();
+    installApkReadyGuard();
   }
 
   window.AppTheme = {
