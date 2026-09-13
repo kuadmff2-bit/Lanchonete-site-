@@ -1,32 +1,23 @@
 (() => {
   const refreshButton = document.querySelector("#refreshOrders");
   if (!refreshButton) return;
-
   const actions = document.createElement("div");
   actions.style.display = "flex";
   actions.style.gap = "8px";
   actions.style.flexWrap = "wrap";
-
   refreshButton.parentNode.insertBefore(actions, refreshButton);
   actions.appendChild(refreshButton);
-
   const clearButton = document.createElement("button");
   clearButton.type = "button";
   clearButton.id = "clearOrdersButton";
   clearButton.className = "secondary-small danger-outline";
   clearButton.textContent = "Limpar pedidos e valores";
   actions.appendChild(clearButton);
-
   clearButton.addEventListener("click", async () => {
-    const first = confirm("Isso vai zerar TODOS os pedidos, valores acumulados e o histórico de pedidos. Produtos e promoções não serão apagados. Continuar?");
-    if (!first) return;
-
-    const second = confirm("Tem certeza? Essa ação não pode ser desfeita.");
-    if (!second) return;
-
+    if (!confirm("Isso vai zerar TODOS os pedidos, valores acumulados e o histórico de pedidos. Produtos e promoções não serão apagados. Continuar?")) return;
+    if (!confirm("Tem certeza? Essa ação não pode ser desfeita.")) return;
     clearButton.disabled = true;
     setStatus("#dashboardStatus", "Limpando pedidos e valores...");
-
     try {
       const data = await api("/api/orders", { method: "DELETE" });
       renderDashboard(data);
@@ -39,8 +30,6 @@
   });
 })();
 
-// No APK administrativo não existe formulário: uma chave exclusiva é entregue
-// pelo app nativo e validada pelo mesmo backend do painel web.
 (() => {
   const isAdminApp = (navigator.userAgent || "").includes("LanchoneteAdminApp/");
   if (!isAdminApp) return;
@@ -51,27 +40,29 @@
   const loginPanel = document.querySelector("#loginPanel");
   const adminApp = document.querySelector("#adminApp");
   const logoutButton = document.querySelector("#logoutButton");
-
   if (loginPanel) loginPanel.hidden = true;
   if (adminApp) adminApp.hidden = false;
   if (logoutButton) logoutButton.hidden = true;
+
+  // Libera a tela nativa imediatamente. Os dados continuam carregando em seguida.
+  document.documentElement.dataset.apkReady = "1";
 
   (async () => {
     try {
       const orders = await api("/api/orders");
       if (typeof renderDashboard === "function") renderDashboard(orders);
-      if (typeof loadProducts === "function" && typeof loadPromotion === "function") {
-        await Promise.all([loadProducts(), loadPromotion()]);
-      }
+      const tasks = [];
+      if (typeof loadProducts === "function") tasks.push(Promise.resolve(loadProducts()));
+      if (typeof loadPromotion === "function") tasks.push(Promise.resolve(loadPromotion()));
+      if (tasks.length) await Promise.allSettled(tasks);
     } catch (error) {
-      if (typeof setStatus === "function") {
-        setStatus("#dashboardStatus", error.message || "Não foi possível abrir o painel administrativo.", "error");
-      }
+      if (typeof setStatus === "function") setStatus("#dashboardStatus", error.message || "Não foi possível atualizar o painel.", "error");
+    } finally {
+      document.documentElement.dataset.apkReady = "1";
     }
   })();
 })();
 
-// Carrega a conexão, configuração transacional e as melhorias novas do painel.
 (() => {
   const loadScript = (src, dataKey) => {
     if (document.querySelector(`script[${dataKey}]`)) return;
@@ -81,7 +72,6 @@
     script.setAttribute(dataKey, "1");
     document.body.appendChild(script);
   };
-
   loadScript("admin-robot.js", "data-admin-robot");
   loadScript("admin-whatsapp.js", "data-admin-whatsapp");
   loadScript("admin-new-features.js", "data-admin-new-features");
