@@ -5,15 +5,32 @@
 
   if (IS_ADMIN_APP) {
     root.dataset.adminAppBootstrap = "1";
+
+    if (!window.__LanchoneteNativeMutationObserver) {
+      window.__LanchoneteNativeMutationObserver = window.MutationObserver;
+      window.MutationObserver = class SafeMutationObserver {
+        constructor(callback) { this.callback = callback; }
+        observe() {}
+        disconnect() {}
+        takeRecords() { return []; }
+      };
+    }
+
     const bootstrapStyle = document.createElement("style");
     bootstrapStyle.id = "admin-app-bootstrap-style";
-    bootstrapStyle.textContent = `html[data-admin-app-bootstrap="1"] #loginPanel{visibility:hidden!important;opacity:0!important;pointer-events:none!important}`;
+    bootstrapStyle.textContent = `
+      html[data-admin-app-bootstrap="1"] #loginPanel{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important}
+      html[data-admin-app-bootstrap="1"] #adminApp{display:block!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important}
+      html[data-admin-app-bootstrap="1"] body,
+      html[data-admin-app-bootstrap="1"] .admin-shell,
+      html[data-admin-app-bootstrap="1"] #adminApp,
+      html[data-admin-app-bootstrap="1"] #adminApp *{touch-action:manipulation}
+      html[data-admin-app-bootstrap="1"] .image-editor-backdrop[hidden]{display:none!important;pointer-events:none!important}
+    `;
     document.head.appendChild(bootstrapStyle);
   }
 
-  function normalize(value) {
-    return value === "light" ? "light" : "dark";
-  }
+  function normalize(value) { return value === "light" ? "light" : "dark"; }
 
   function installPublicHeaderFix() {
     if (document.getElementById("public-theme-header-fix")) return;
@@ -36,20 +53,13 @@
     document.head.appendChild(style);
   }
 
-  function storedTheme() {
-    try {
-      return normalize(localStorage.getItem(STORAGE_KEY));
-    } catch {
-      return "dark";
-    }
-  }
+  function storedTheme() { try { return normalize(localStorage.getItem(STORAGE_KEY)); } catch { return "dark"; } }
 
   function updateButtons() {
     const current = normalize(root.dataset.theme);
     const target = current === "dark" ? "light" : "dark";
     const label = target === "light" ? "Modo claro" : "Modo escuro";
     const icon = target === "light" ? "☀" : "☾";
-
     document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
       button.innerHTML = `<span aria-hidden="true">${icon}</span><b>${label}</b>`;
       button.setAttribute("aria-label", `Ativar ${label.toLowerCase()}`);
@@ -61,47 +71,53 @@
     const theme = normalize(value);
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
-    if (persist) {
-      try { localStorage.setItem(STORAGE_KEY, theme); } catch {}
-    }
+    if (persist) { try { localStorage.setItem(STORAGE_KEY, theme); } catch {} }
     updateButtons();
     window.dispatchEvent(new CustomEvent("appthemechange", { detail: { theme } }));
     return theme;
   }
 
-  function installApkReadyGuard() {
+  function bootstrapAdminApp() {
     if (!IS_ADMIN_APP) return;
-    let ticks = 0;
-    const timer = setInterval(() => {
-      const app = document.getElementById("adminApp");
-      if (app && !app.hidden) document.documentElement.dataset.apkReady = "1";
-      ticks += 1;
-      if (ticks >= 60) clearInterval(timer);
-    }, 250);
+    const login = document.getElementById("loginPanel");
+    const app = document.getElementById("adminApp");
+    const logout = document.getElementById("logoutButton");
+    if (login) { login.hidden = true; login.style.display = "none"; }
+    if (app) {
+      app.hidden = false;
+      app.removeAttribute("hidden");
+      app.style.pointerEvents = "auto";
+      app.style.visibility = "visible";
+      app.style.opacity = "1";
+    }
+    if (logout) logout.hidden = true;
+    document.body.style.pointerEvents = "auto";
+    document.documentElement.dataset.apkReady = "1";
+
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest?.(".tab-button[data-tab]");
+      if (!button) return;
+      const tab = button.dataset.tab;
+      document.querySelectorAll(".tab-button[data-tab]").forEach((item) => item.classList.toggle("active", item === button));
+      document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === `tab-${tab}`));
+    }, true);
   }
 
   installPublicHeaderFix();
   apply(storedTheme(), false);
 
   document.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-theme-toggle]");
+    const button = event.target.closest?.("[data-theme-toggle]");
     if (!button) return;
     apply(root.dataset.theme === "light" ? "dark" : "light");
   });
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
-      installPublicHeaderFix();
-      updateButtons();
-      installApkReadyGuard();
-    });
+    document.addEventListener("DOMContentLoaded", () => { installPublicHeaderFix(); updateButtons(); bootstrapAdminApp(); }, { once: true });
   } else {
     updateButtons();
-    installApkReadyGuard();
+    bootstrapAdminApp();
   }
 
-  window.AppTheme = {
-    apply,
-    get current() { return normalize(root.dataset.theme); }
-  };
+  window.AppTheme = { apply, get current() { return normalize(root.dataset.theme); } };
 })();
