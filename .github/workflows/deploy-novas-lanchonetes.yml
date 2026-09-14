@@ -1,6 +1,6 @@
 name: Deploy Lanchonetes 2 e 3
 
-# Revisão 2026-09-14: publicar correção definitiva do travamento de toque no painel.
+# Revisão 2026-09-14: publicar correção de toque no APK sem MutationObserver contínuo.
 
 on:
   workflow_dispatch:
