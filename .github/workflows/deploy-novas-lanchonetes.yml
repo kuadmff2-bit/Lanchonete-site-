@@ -1,6 +1,6 @@
 name: Deploy Lanchonetes 2 e 3
 
-# Revisão 2026-09-14: publicar correção de toque no APK sem MutationObserver contínuo.
+# Revisão 2026-09-14: publicar botões de ações dos produtos maiores e responsivos.
 
 on:
   workflow_dispatch:
