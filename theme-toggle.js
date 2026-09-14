@@ -53,6 +53,53 @@
     document.head.appendChild(style);
   }
 
+  function installAdminProductButtonFix() {
+    if (document.getElementById("admin-product-button-hotfix")) return;
+    const style = document.createElement("style");
+    style.id = "admin-product-button-hotfix";
+    style.textContent = `
+      body.admin-view #tab-products .admin-product .product-actions{
+        grid-area:actions!important;
+        grid-column:1/-1!important;
+        grid-row:auto!important;
+        justify-self:stretch!important;
+        align-self:stretch!important;
+        width:100%!important;
+        max-width:none!important;
+        min-width:0!important;
+        margin:0!important;
+        display:grid!important;
+        grid-template-columns:repeat(2,minmax(0,1fr))!important;
+        gap:10px!important;
+      }
+      body.admin-view #tab-products .admin-product .product-actions button{
+        width:100%!important;
+        min-width:0!important;
+        max-width:none!important;
+        min-height:54px!important;
+        height:auto!important;
+        padding:12px 10px!important;
+        margin:0!important;
+        border-radius:12px!important;
+        display:flex!important;
+        align-items:center!important;
+        justify-content:center!important;
+        text-align:center!important;
+        font-size:14px!important;
+        font-weight:800!important;
+        line-height:1.2!important;
+        white-space:normal!important;
+        overflow-wrap:anywhere!important;
+        word-break:normal!important;
+      }
+      @media(max-width:420px){
+        body.admin-view #tab-products .admin-product .product-actions{gap:8px!important}
+        body.admin-view #tab-products .admin-product .product-actions button{min-height:52px!important;padding:11px 8px!important;font-size:13px!important}
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function storedTheme() { try { return normalize(localStorage.getItem(STORAGE_KEY)); } catch { return "dark"; } }
 
   function updateButtons() {
@@ -104,6 +151,7 @@
   }
 
   installPublicHeaderFix();
+  installAdminProductButtonFix();
   apply(storedTheme(), false);
 
   document.addEventListener("click", (event) => {
@@ -113,8 +161,9 @@
   });
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => { installPublicHeaderFix(); updateButtons(); bootstrapAdminApp(); }, { once: true });
+    document.addEventListener("DOMContentLoaded", () => { installPublicHeaderFix(); installAdminProductButtonFix(); updateButtons(); bootstrapAdminApp(); }, { once: true });
   } else {
+    installAdminProductButtonFix();
     updateButtons();
     bootstrapAdminApp();
   }
