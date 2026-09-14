@@ -1,6 +1,6 @@
 name: Deploy Lanchonetes 2 e 3
 
-# Revisão 2026-09-14: publicar correção de toque e remover bloqueio por gesto.
+# Revisão 2026-09-14: publicar correção definitiva do travamento de toque no painel.
 
 on:
   workflow_dispatch:
