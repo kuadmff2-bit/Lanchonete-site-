@@ -1,6 +1,15 @@
 (() => {
   const STORAGE_KEY = "lanchonete-theme-v1";
   const root = document.documentElement;
+  const IS_ADMIN_APP = (navigator.userAgent || "").includes("LanchoneteAdminApp/");
+
+  if (IS_ADMIN_APP) {
+    root.dataset.adminAppBootstrap = "1";
+    const bootstrapStyle = document.createElement("style");
+    bootstrapStyle.id = "admin-app-bootstrap-style";
+    bootstrapStyle.textContent = `html[data-admin-app-bootstrap="1"] #loginPanel{visibility:hidden!important;opacity:0!important;pointer-events:none!important}`;
+    document.head.appendChild(bootstrapStyle);
+  }
 
   function normalize(value) {
     return value === "light" ? "light" : "dark";
@@ -61,7 +70,7 @@
   }
 
   function installApkReadyGuard() {
-    if (!(navigator.userAgent || "").includes("LanchoneteAdminApp/")) return;
+    if (!IS_ADMIN_APP) return;
     let ticks = 0;
     const timer = setInterval(() => {
       const app = document.getElementById("adminApp");
