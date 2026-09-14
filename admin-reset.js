@@ -44,7 +44,6 @@
   if (adminApp) adminApp.hidden = false;
   if (logoutButton) logoutButton.hidden = true;
 
-  // Libera a tela nativa imediatamente. Os dados continuam carregando em seguida.
   document.documentElement.dataset.apkReady = "1";
 
   (async () => {
@@ -64,6 +63,11 @@
 })();
 
 (() => {
+  // O layout antigo reescrevia este título em um MutationObserver e podia entrar
+  // em um ciclo infinito de mutações, travando completamente os toques na WebView.
+  const robotHeading = document.querySelector("#tab-robot .panel-heading h2");
+  if (robotHeading) robotHeading.remove();
+
   const loadScript = (src, dataKey) => {
     if (document.querySelector(`script[${dataKey}]`)) return;
     const script = document.createElement("script");
