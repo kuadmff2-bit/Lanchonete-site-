@@ -23,38 +23,30 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private static final String ADMIN_URL = "https://lanchonete-site.kuadmff2.workers.dev/admin?v=20260913-nativefix5";
+    private static final String ADMIN_URL = "https://lanchonete-site.kuadmff2.workers.dev/admin?v=20260914-nativefix6";
     private static final String ALLOWED_HOST = "lanchonete-site.kuadmff2.workers.dev";
-    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.9-nativefix5";
+    private static final String APP_USER_AGENT = "LanchoneteAdminApp/1.9-nativefix6";
     private static final int FILE_CHOOSER_REQUEST = 4102;
-    private static final long SPLASH_MAX_MS = 2500L;
 
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
-    private FrameLayout root;
     private WebView webView;
-    private SplashView splashView;
     private ValueCallback<Uri[]> filePathCallback;
-    private boolean splashRemoved = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        root = new FrameLayout(this);
+        FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(13, 13, 13));
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(13, 13, 13));
-        // A WebView fica visível desde o início. O splash é apenas uma camada por cima.
-        // Assim nenhuma API, JS ou callback consegue manter o app preso na abertura.
         webView.setVisibility(View.VISIBLE);
+        webView.setClickable(true);
+        webView.setFocusable(true);
+        webView.setFocusableInTouchMode(true);
+        webView.requestFocus(View.FOCUS_DOWN);
         root.addView(webView, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-        ));
-
-        splashView = new SplashView(this);
-        root.addView(splashView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
         ));
@@ -65,8 +57,11 @@ public class MainActivity extends Activity {
         webView.clearCache(true);
         webView.loadUrl(ADMIN_URL);
 
-        // Failsafe absoluto: o splash sai mesmo se a página, a internet ou o JavaScript falharem.
-        uiHandler.postDelayed(this::removeSplash, SPLASH_MAX_MS);
+        // Tenta liberar o painel várias vezes, sem bloquear a tela nem os toques.
+        uiHandler.postDelayed(this::forceShowPanel, 600L);
+        uiHandler.postDelayed(this::forceShowPanel, 1400L);
+        uiHandler.postDelayed(this::forceShowPanel, 2600L);
+        uiHandler.postDelayed(this::forceShowPanel, 4500L);
     }
 
     private void configureWebView() {
@@ -118,7 +113,6 @@ public class MainActivity extends Activity {
                 super.onPageFinished(view, url);
                 if (url != null && url.contains("/admin")) {
                     forceShowPanel();
-                    removeSplash();
                     refreshAdminData();
                 }
             }
@@ -127,7 +121,6 @@ public class MainActivity extends Activity {
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
                 if (request != null && request.isForMainFrame()) {
-                    removeSplash();
                     Toast.makeText(MainActivity.this, "Não foi possível carregar o painel. Verifique a internet e tente novamente.", Toast.LENGTH_LONG).show();
                 }
             }
@@ -135,9 +128,6 @@ public class MainActivity extends Activity {
             @Override
             public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
                 super.onReceivedHttpError(view, request, errorResponse);
-                if (request != null && request.isForMainFrame()) {
-                    removeSplash();
-                }
             }
         });
 
@@ -179,8 +169,10 @@ public class MainActivity extends Activity {
                 "const app=document.querySelector('#adminApp');" +
                 "const logout=document.querySelector('#logoutButton');" +
                 "if(login)login.hidden=true;" +
-                "if(app)app.hidden=false;" +
+                "if(app){app.hidden=false;app.style.pointerEvents='auto';app.style.opacity='1';}" +
                 "if(logout)logout.hidden=true;" +
+                "document.querySelectorAll('#promoEditBackdrop').forEach(x=>x.remove());" +
+                "document.body.classList.remove('promo-edit-modal-open');" +
                 "try{const token=window.AdminBridge&&window.AdminBridge.getToken?window.AdminBridge.getToken():'';if(token&&typeof adminAppToken!=='undefined')adminAppToken=token;}catch(e){}" +
                 "})();";
         webView.evaluateJavascript(script, null);
@@ -204,20 +196,6 @@ public class MainActivity extends Activity {
                 "}catch(e){const status=document.querySelector('#dashboardStatus');if(status){status.textContent='Não foi possível atualizar os dados agora.';status.className='status error';}}" +
                 "})();";
         webView.evaluateJavascript(script, null);
-    }
-
-    private void removeSplash() {
-        if (splashRemoved) return;
-        splashRemoved = true;
-        if (webView != null) {
-            webView.setVisibility(View.VISIBLE);
-            webView.setAlpha(1f);
-        }
-        if (splashView != null) {
-            splashView.stopAnimation();
-            if (root != null) root.removeView(splashView);
-            splashView = null;
-        }
     }
 
     private void openExternal(Uri uri) {
@@ -279,10 +257,6 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         uiHandler.removeCallbacksAndMessages(null);
         CookieManager.getInstance().flush();
-        if (splashView != null) {
-            splashView.stopAnimation();
-            splashView = null;
-        }
         if (webView != null) {
             webView.removeJavascriptInterface("AdminBridge");
             webView.stopLoading();
@@ -291,7 +265,6 @@ public class MainActivity extends Activity {
             webView.destroy();
             webView = null;
         }
-        root = null;
         super.onDestroy();
     }
 }
