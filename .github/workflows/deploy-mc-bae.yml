@@ -1,0 +1,36 @@
+name: Deploy MC BAE Cardapio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mc-bae-deploy/**'
+      - '.github/workflows/deploy-mc-bae.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-mc-bae-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar JavaScript
+        working-directory: mc-bae-deploy
+        run: node --check src/worker.js; node --check public/app.js; node --check public/admin.js
+
+      - name: Instalar Wrangler
+        run: npm install --global wrangler@4
+
+      - name: Publicar MC BAE no Cloudflare
+        working-directory: mc-bae-deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: wrangler deploy --config wrangler.jsonc
